@@ -9,18 +9,18 @@ Status tracker only. For what each feature is and why it's in scope, see `CLAUDE
 | Feature | Status |
 |---|---|
 | PDF text + bbox extraction (backend) | ✅ Done |
-| Multi-page support | ⏳ Planned |
+| Multi-page support | ✅ Done |
 | XY-cut reading-order solver | ✅ Prototype · ✅ Backend port |
-| Threshold tuning (gap thresholds derived from doc stats) | ⏳ Planned |
+| Threshold tuning (gap thresholds derived from doc stats) | ✅ Done |
 | Heuristic type classifier | ✅ Prototype · ✅ Backend port |
 | Parent-child hierarchy builder | ✅ Prototype · ✅ Backend port |
-| Accuracy evaluation (labeled dataset) | ⏳ Planned |
-| Bounding-box overlay visualization | ✅ Prototype |
-| Click-to-inspect cross-highlight | ✅ Prototype |
+| Accuracy evaluation (labeled dataset) | ✅ Done |
+| Bounding-box overlay visualization | ✅ Done |
+| Click-to-inspect cross-highlight | ✅ Done |
 | JSON hierarchy export | ✅ Done |
-| Real PDF upload (pdf.js) | 🚧 Experimental |
+| Real PDF upload (pdf.js) | ✅ Done |
 | Table cell structure | 🧊 Backlog |
-| Footnote-marker linking | 🧊 Backlog |
+| Footnote-marker linking | ✅ Done |
 | Grid/Excel reconstruction mode | 🧊 Backlog |
 
 ---
@@ -29,10 +29,10 @@ Status tracker only. For what each feature is and why it's in scope, see `CLAUDE
 
 | Phase | Goal | Target date | Status |
 |---|---|---|---|
-| 1 | Real extraction backend + port XY-cut from prototype | `[ ]` | ⏳ Planned |
-| 2 | Port classification + hierarchy builder, stabilize JSON export | `[ ]` | ⏳ Planned |
-| 3 | Frontend wired to real backend output | `[ ]` | ⏳ Planned |
-| 4 | Evaluation + one stretch goal | `[ ]` | ⏳ Planned |
+| 1 | Real extraction backend + port XY-cut from prototype | `[ ]` | ✅ Done |
+| 2 | Port classification + hierarchy builder, stabilize JSON export | `[ ]` | ✅ Done |
+| 3 | Frontend wired to real backend output | `[ ]` | ✅ Done |
+| 4 | Evaluation + one stretch goal | `[ ]` | ✅ Done |
 | 5 | Thesis writeup + defense prep | `[ ]` | ⏳ Planned |
 
 ---

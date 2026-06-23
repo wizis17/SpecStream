@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecStream — Blueprint &amp; Spec Sheet Segmenter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0c1a26;
+    --bg-panel:#10222f;
+    --bg-panel-2:#13283a;
+    --line-cyan:#4fb8c9;
+    --line-cyan-dim:#2c4f59;
+    --text-primary:#e9f2f4;
+    --text-dim:#7f97a3;
+    --amber:#d99a4e;
+    --paper:#f4f1e9;
+    --paper-edge:#cfc8b4;
+    --ink:#23262b;
+    --c-title:#1d3557;
+    --c-heading1:#1f7a83;
+    --c-heading2:#4a9ba6;
+    --c-spec:#7b8794;
+    --c-table:#b5832c;
+    --c-warning:#c1442d;
+    --c-footnote:#7d6ba8;
+    --c-subtitle:#97a1ab;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg-deep);
+    background-image:
+      linear-gradient(var(--line-cyan-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-cyan-dim) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-attachment:fixed;
+    color:var(--text-primary);
+    font-family:'IBM Plex Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  ::selection{background:var(--line-cyan);color:#06161e;}
+
+  .titleblock{
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:linear-gradient(180deg, rgba(16,34,47,.9), rgba(16,34,47,.6));
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .titleblock .mark{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:18px;
+    letter-spacing:.04em;
+    color:var(--text-primary);
+  }
+  .titleblock .mark span{color:var(--line-cyan);}
+  .titleblock .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:.05em;
+    margin-top:2px;
+  }
+  .titleblock .meta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    text-align:right;
+    line-height:1.6;
+    letter-spacing:.03em;
+  }
+  .titleblock .meta b{color:var(--amber);font-weight:600;}
+
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    padding:10px 20px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:rgba(12,26,38,.6);
+  }
+  .btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.03em;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line-cyan-dim);
+    color:var(--text-primary);
+    padding:7px 12px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .btn:hover{border-color:var(--line-cyan);color:#fff;}
+  .btn.active{background:var(--line-cyan);color:#06161e;border-color:var(--line-cyan);font-weight:600;}
+  .seg{
+    display:flex;
+    border:1px solid var(--line-cyan-dim);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .seg .btn{border:none;border-radius:0;}
+  .seg .btn+.btn{border-left:1px solid var(--line-cyan-dim);}
+  .divider{width:1px;height:20px;background:var(--line-cyan-dim);margin:0 4px;}
+  .filechip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    padding:0 4px;
+  }
+  input[type=file]{display:none;}
+
+  .legend{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    padding:8px 20px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:rgba(12,26,38,.4);
+  }
+  .chip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:.03em;
+    color:var(--text-dim);
+    border:1px solid var(--line-cyan-dim);
+    padding:4px 8px;
+    border-radius:12px;
+    cursor:pointer;
+    user-select:none;
+    opacity:.55;
+    transition:opacity .15s;
+  }
+  .chip.on{opacity:1;color:var(--text-primary);}
+  .chip .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+
+  .workspace{
+    display:grid;
+    grid-template-columns:1.55fr 1fr;
+    gap:16px;
+    padding:16px 20px;
+  }
+  @media (max-width:880px){
+    .workspace{grid-template-columns:1fr;}
+  }
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--line-cyan-dim);
+    border-radius:6px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .panel-head{
+    padding:9px 14px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--text-dim);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .panel-head .count{color:var(--line-cyan);}
+
+  .stage{
+    padding:18px;
+    display:flex;
+    justify-content:center;
+    overflow:auto;
+    background:
+      repeating-linear-gradient(0deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px);
+  }
+  #pageCanvas{
+    background:var(--paper);
+    box-shadow:0 0 0 1px var(--paper-edge), 0 14px 34px rgba(0,0,0,.45);
+    cursor:crosshair;
+    max-width:100%;
+    height:auto;
+  }
+
+  .detail{
+    border-top:1px solid var(--line-cyan-dim);
+    padding:10px 14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    min-height:54px;
+  }
+  .detail .empty{color:var(--text-dim);opacity:.6;font-style:italic;}
+  .detail .type-tag{
+    display:inline-block;
+    padding:2px 7px;
+    border-radius:3px;
+    font-weight:600;
+    color:#06161e;
+    margin-right:8px;
+    font-size:10px;
+    letter-spacing:.04em;
+  }
+  .detail .crumb{color:var(--line-cyan);}
+  .detail .text{color:var(--text-primary);margin-top:5px;}
+  .detail .coords{color:var(--text-dim);margin-top:4px;font-size:10px;}
+
+  .tabs{display:flex;border-bottom:1px solid var(--line-cyan-dim);}
+  .tab{
+    flex:1;
+    padding:9px 0;
+    text-align:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.04em;
+    color:var(--text-dim);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  .tab.active{color:var(--text-primary);border-bottom-color:var(--line-cyan);}
+  .tabpane{display:none;flex:1;overflow:auto;}
+  .tabpane.active{display:block;}
+
+  .tree{padding:10px 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .node{margin:1px 0;}
+  .node-row{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    padding:4px 6px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .node-row:hover{background:var(--bg-panel-2);}
+  .node-row.selected{background:rgba(79,184,201,.16);outline:1px solid var(--line-cyan);}
+  .node-row .twist{width:12px;flex:none;color:var(--text-dim);font-size:10px;margin-top:3px;user-select:none;}
+  .node-row .dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:4px;}
+  .node-row .label{color:var(--text-primary);line-height:1.4;}
+  .node-row .label small{color:var(--text-dim);display:block;font-size:10px;}
+  .children{margin-left:18px;border-left:1px dashed var(--line-cyan-dim);padding-left:6px;}
+  .node.collapsed > .children{display:none;}
+
+  .rawlist{padding:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .rawrow{
+    display:grid;
+    grid-template-columns:26px 90px 1fr;
+    gap:8px;
+    padding:5px 6px;
+    border-radius:3px;
+    cursor:pointer;
+    align-items:start;
+  }
+  .rawrow:hover{background:var(--bg-panel-2);}
+  .rawrow .idx{color:var(--line-cyan);}
+  .rawrow .ty{color:var(--text-dim);}
+  .rawrow .tx{color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  pre#jsonOut{
+    margin:0;
+    padding:14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    line-height:1.5;
+    color:#bfe3ea;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .jsonbar{
+    display:flex;justify-content:flex-end;padding:8px 12px;border-bottom:1px solid var(--line-cyan-dim);
+  }
+
+  .statusbar{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:8px 20px;
+    border-top:1px solid var(--line-cyan-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+  }
+  .statusbar b{color:var(--line-cyan);font-weight:600;}
+  .footer-note{
+    padding:14px 20px 26px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    line-height:1.6;
+    max-width:900px;
+  }
+  .footer-note b{color:var(--text-primary);}
+</style>
+</head>
+<body>
+
+  <div class="titleblock">
+    <div>
+      <div class="mark">SPEC<span>STREAM</span></div>
+      <div class="sub">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER</div>
+    </div>
+    <div class="meta">
+      MODE: <b id="modeLabel">SAMPLE DATASHEET</b><br>
+      SHEET: <b>1 / 1</b> &nbsp; SCALE: 1:1
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn active" id="btnSample">Load sample datasheet</button>
+    <button class="btn" id="btnUpload">Upload PDF (experimental)</button>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <span class="filechip" id="fileChip"></span>
+    <div class="divider"></div>
+    <div class="seg">
+      <button class="btn" id="btnNaive">Naive scan order</button>
+      <button class="btn active" id="btnXYCut">XY-cut order</button>
+    </div>
+    <div class="divider"></div>
+    <button class="btn active" id="btnBoxes">Bounding boxes: ON</button>
+    <button class="btn active" id="btnPath">Reading path: ON</button>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="workspace">
+
+    <div class="panel">
+      <div class="panel-head">
+        <span>PAGE VIEWER — INTERACTIVE SOURCE HIGHLIGHTS</span>
+        <span class="count" id="blockCount">— blocks</span>
+      </div>
+      <div class="stage">
+        <canvas id="pageCanvas" width="1190" height="700"></canvas>
+      </div>
+      <div class="detail" id="detailBox"><span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" data-tab="tree">Hierarchy</div>
+        <div class="tab" data-tab="raw">Reading order</div>
+        <div class="tab" data-tab="json">JSON</div>
+      </div>
+      <div class="tabpane active" data-tab="tree">
+        <div class="tree" id="treeOut"></div>
+      </div>
+      <div class="tabpane" data-tab="raw">
+        <div class="rawlist" id="rawOut"></div>
+      </div>
+      <div class="tabpane" data-tab="json">
+        <div class="jsonbar"><button class="btn" id="btnCopyJson">Download JSON</button></div>
+        <pre id="jsonOut"></pre>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="statusbar">
+    <span>BLOCKS: <b id="stBlocks">—</b></span>
+    <span>HORIZONTAL CUTS: <b id="stHCuts">—</b></span>
+    <span>VERTICAL CUTS: <b id="stVCuts">—</b></span>
+    <span>MAX DEPTH: <b id="stDepth">—</b></span>
+    <span>SELECTED: <b id="stSel">—</b></span>
+  </div>
+
+  <div class="footer-note">
+    <b>How to read this demo —</b> toggle "Naive scan order" to see how a left-to-right, top-to-bottom parser bleeds the two specification columns together. Toggle "XY-cut order" to see the recursive projection-profile cut isolate each column before reading it top-to-bottom. Click any region to see its detected type and its place in the parent-child hierarchy.
+  </div>
+
+<script>
+(function(){
+
+  const TYPES = {
+    title:          {label:'Title',         color:'#1d3557'},
+    subtitle:       {label:'Subtitle',      color:'#97a1ab'},
+    heading1:       {label:'Heading L1',    color:'#1f7a83'},
+    heading2:       {label:'Heading L2',    color:'#4a9ba6'},
+    spec:           {label:'Spec line',     color:'#8a93a0'},
+    'table-header': {label:'Table header',  color:'#b5832c'},
+    'table-row':    {label:'Table row',     color:'#caa15a'},
+    warning:        {label:'Warning',       color:'#c1442d'},
+    footnote:       {label:'Footnote',      color:'#7d6ba8'},
+  };
+
+  function buildSampleBlocks(){
+    const B = []; let id = 0;
+    const add = (x,y,w,h,fs,text) => B.push({id:id++,page:1,x,y,w,h,fontSize:fs,text});
+    add(40,24,600,22,20,'MCU-7400 SERIES — INDUSTRIAL MICROCONTROLLER');
+    add(40,54,500,14,12,'Technical Datasheet · Revision 3.2 · June 2026');
+    add(40,110,360,14,15,'1. Electrical Characteristics');
+    add(40,132,360,14,12.5,'1.1 Power Supply');
+    add(40,154,360,14,11,'Operating Voltage ........... 1.8V – 3.6V');
+    add(40,176,360,14,11,'Active Supply Current ........ 4.2 mA typ');
+    add(40,198,360,14,11,'Standby Supply Current ....... 1.1 µA typ');
+    add(40,220,360,14,12.5,'1.2 Absolute Maximum Ratings');
+    add(40,242,360,14,10.5,'Parameter | Min | Max | Unit');
+    add(40,264,360,14,10.5,'Vdd | -0.3 | 4.0 | V');
+    add(40,286,360,14,10.5,'Tstg | -55 | 150 | °C');
+    add(40,308,360,14,10.5,'Iout (per pin) | — | 25 | mA');
+    add(40,330,360,14,12.5,'1.3 Clock & Timing');
+    add(40,352,360,14,11,'System Clock .................. up to 120 MHz');
+    add(40,374,360,14,11,'RTC Accuracy .................. ±20 ppm');
+    add(440,110,360,14,15,'2. Mechanical & Environmental');
+    add(440,132,360,14,12.5,'2.1 Package Options');
+    add(440,154,360,14,11,'Package Types ................. 64-LQFP / 48-QFN');
+    add(440,176,360,14,11,'Body Size ...................... 10×10 mm / 7×7 mm');
+    add(440,198,360,36,11,'⚠ CAUTION: Exceeding ratings in §1.2 may\ncause permanent equipment damage.¹');
+    add(440,242,360,14,12.5,'2.2 Operating Temperature');
+    add(440,264,360,14,11,'Industrial Grade ............... -40°C to +105°C');
+    add(440,286,360,14,11,'Standard Grade .................. 0°C to +70°C');
+    add(440,308,360,14,12.5,'2.3 Humidity & ESD');
+    add(440,330,360,14,11,'Storage Humidity ............... 5–95% RH non-cond.');
+    add(440,352,360,14,11,'ESD Rating (HBM/CDM) ........... ±4kV / ±1.5kV²');
+    add(40,420,740,14,9.5,'¹ See Section 1.2 — Absolute Maximum Ratings — for full derating curves.');
+    add(40,438,740,14,9.5,'² Tested per JESD22-A114 (HBM) and JESD22-C101 (CDM) standards.');
+    return {blocks:B, pageW:850, pageH:500, source:'sample'};
+  }
+
+  function classify(text, fontSize){
+    const t = text.replace(/\n/g,' ').trim();
+    if (/^[⚠]|^CAUTION\b|^WARNING\b|^NOTE:/i.test(t)) return 'warning';
+    if (fontSize <= 10) return 'footnote';
+    const m = t.match(/^(\d+(?:\.\d+)*)\s+\S/);
+    if (m) return m[1].split('.').length <= 1 ? 'heading1' : 'heading2';
+    if (/\|/.test(t)) return /parameter/i.test(t) ? 'table-header' : 'table-row';
+    if (fontSize >= 18) return 'title';
+    if (fontSize >= 11.5 && fontSize < 14) return 'subtitle';
+    return 'spec';
+  }
+
+  const H_GAP = 16, V_GAP = 18;
+  let cutStats = {h:0, v:0};
+
+  function mergedGaps(intervals, minGap){
+    if (!intervals.length) return [];
+    const sorted = intervals.slice().sort((a,b)=>a[0]-b[0]);
+    const merged = [sorted[0].slice()];
+    for (let i=1;i<sorted.length;i++){
+      const last = merged[merged.length-1];
+      if (sorted[i][0] <= last[1]) last[1] = Math.max(last[1], sorted[i][1]);
+      else merged.push(sorted[i].slice());
+    }
+    const gaps = [];
+    for (let i=1;i<merged.length;i++){
+      const gap = merged[i][0]-merged[i-1][1];
+      if (gap >= minGap) gaps.push([merged[i-1][1], merged[i][0]]);
+    }
+    return gaps;
+  }
+
+  function xyCut(blocks, budget){
+    if (blocks.length <= 1 || budget <= 0) return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
+    const hGaps = mergedGaps(blocks.map(b=>[b.y, b.y+b.h]), H_GAP);
+    if (hGaps.length){
+      cutStats.h++;
+      const cut = hGaps[0];
+      const top = blocks.filter(b=>b.y+b.h <= cut[0]+0.5);
+      const bot = blocks.filter(b=>b.y >= cut[1]-0.5);
+      return [...xyCut(top, budget-1), ...xyCut(bot, budget-1)];
+    }
+    const vGaps = mergedGaps(blocks.map(b=>[b.x, b.x+b.w]), V_GAP);
+    if (vGaps.length){
+      cutStats.v++;
+      const cut = vGaps[0];
+      const left = blocks.filter(b=>b.x+b.w <= cut[0]+0.5);
+      const right = blocks.filter(b=>b.x >= cut[1]-0.5);
+      return [...xyCut(left, budget-1), ...xyCut(right, budget-1)];
+    }
+    return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
+  }
+
+  function naiveOrder(blocks){ return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x); }
+
+  function buildHierarchy(ordered){
+    const root = {id:'root', type:'document', label:'Document', children:[]};
+    let titleNode = null, footnoteGroup = null;
+    let stack = [{node:root, depth:0}];
+    function topAtMost(d){ while(stack.length>1 && stack[stack.length-1].depth>=d) stack.pop(); return stack[stack.length-1].node; }
+    ordered.forEach(b=>{
+      const label = b.text.replace(/\n/g,' ');
+      const leaf = {id:b.id, type:b.type, label, block:b, children:[]};
+      if (b.type==='title'){ root.children.push(leaf); titleNode=leaf; stack=[{node:root,depth:0},{node:leaf,depth:1}]; return; }
+      if (b.type==='subtitle'){ (titleNode||root).children.push(leaf); return; }
+      if (b.type==='heading1'){ const p=topAtMost(2); p.children.push(leaf); stack.push({node:leaf,depth:2}); return; }
+      if (b.type==='heading2'){ const p=topAtMost(3); p.children.push(leaf); stack.push({node:leaf,depth:3}); return; }
+      if (b.type==='footnote'){ if(!footnoteGroup){ footnoteGroup={id:'footnotes',type:'heading1',label:'Footnotes',children:[]}; root.children.push(footnoteGroup); } footnoteGroup.children.push(leaf); return; }
+      stack[stack.length-1].node.children.push(leaf);
+    });
+    return root;
+  }
+
+  function maxDepth(node, d=0){ if(!node.children||!node.children.length) return d; return Math.max(...node.children.map(c=>maxDepth(c,d+1))); }
+
+  let doc=null, blocksTyped=[], xyOrder=[], naiveSeq=[], hierarchy=null;
+  let useXY=true, showBoxes=true, showPath=true;
+  let activeFilters=new Set(Object.keys(TYPES));
+  let selectedId=null, pageImage=null;
+
+  const canvas = document.getElementById('pageCanvas');
+  const ctx = canvas.getContext('2d');
+  const RES = 1.4;
+
+  function runPipeline(){
+    blocksTyped = doc.blocks.map(b=>({...b, type:classify(b.text,b.fontSize)}));
+    cutStats={h:0,v:0};
+    xyOrder = xyCut(blocksTyped, 40);
+    naiveSeq = naiveOrder(blocksTyped);
+    hierarchy = buildHierarchy(xyOrder);
+    document.getElementById('blockCount').textContent = blocksTyped.length+' blocks';
+    document.getElementById('stBlocks').textContent = blocksTyped.length;
+    document.getElementById('stHCuts').textContent = cutStats.h;
+    document.getElementById('stVCuts').textContent = cutStats.v;
+    document.getElementById('stDepth').textContent = maxDepth(hierarchy);
+    renderLegend(); renderTree(); renderRaw(); renderJson(); drawAll();
+  }
+
+  function setupCanvas(){ canvas.width=doc.pageW*RES; canvas.height=doc.pageH*RES; canvas.style.width=doc.pageW+'px'; canvas.style.height=doc.pageH+'px'; }
+
+  function drawAll(){
+    setupCanvas();
+    ctx.save(); ctx.scale(RES,RES); ctx.clearRect(0,0,doc.pageW,doc.pageH);
+    if (doc.source==='sample'){
+      ctx.fillStyle='#f4f1e9'; ctx.fillRect(0,0,doc.pageW,doc.pageH);
+      ctx.strokeStyle='#cfc8b4'; ctx.lineWidth=1; ctx.strokeRect(0.5,0.5,doc.pageW-1,doc.pageH-1);
+      ctx.strokeStyle='#23262b';
+      ctx.beginPath(); ctx.moveTo(40,82); ctx.lineTo(doc.pageW-40,82); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(40,408); ctx.lineTo(doc.pageW-40,408); ctx.stroke();
+      drawSampleText();
+    } else if (pageImage){ ctx.drawImage(pageImage,0,0,doc.pageW,doc.pageH); }
+    if (showBoxes) drawBoxes();
+    if (showPath) drawPath();
+    ctx.restore();
+  }
+
+  function drawSampleText(){
+    ctx.textBaseline='top';
+    blocksTyped.forEach(b=>{
+      ctx.font=(b.type.startsWith('heading')||b.type==='title'?'600 ':'400 ')+b.fontSize+'px "IBM Plex Mono",monospace';
+      ctx.fillStyle=b.type==='warning'?'#8a2f1f':(b.type==='footnote'?'#5b5347':'#23262b');
+      b.text.split('\n').forEach((line,i)=>ctx.fillText(line,b.x,b.y+i*14));
+    });
+  }
+
+  function drawBoxes(){
+    blocksTyped.forEach(b=>{
+      if (!activeFilters.has(b.type)) return;
+      const c=TYPES[b.type].color;
+      ctx.save();
+      ctx.strokeStyle=c; ctx.lineWidth=selectedId===b.id?2.4:1.1;
+      ctx.setLineDash(b.type==='spec'?[3,2]:[]);
+      ctx.globalAlpha=selectedId===null||selectedId===b.id?0.95:0.35;
+      ctx.strokeRect(b.x-2,b.y-2,b.w+4,b.h+4);
+      if (selectedId===b.id){ ctx.fillStyle=c; ctx.globalAlpha=0.12; ctx.fillRect(b.x-2,b.y-2,b.w+4,b.h+4); }
+      ctx.restore();
+    });
+  }
+
+  function drawPath(){
+    const seq=useXY?xyOrder:naiveSeq;
+    const pts=seq.map(b=>[b.x+Math.min(b.w,40)*0.15, b.y+b.h/2]);
+    ctx.save();
+    ctx.strokeStyle=useXY?'#3fb8c4':'#e2725b'; ctx.lineWidth=1.4; ctx.globalAlpha=0.75; ctx.setLineDash([5,3]);
+    ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1])); ctx.stroke();
+    ctx.setLineDash([]);
+    pts.forEach((p,i)=>{
+      ctx.beginPath(); ctx.arc(p[0],p[1],7,0,Math.PI*2);
+      ctx.fillStyle=useXY?'#3fb8c4':'#e2725b'; ctx.globalAlpha=0.92; ctx.fill();
+      ctx.fillStyle='#06161e'; ctx.font='700 8.5px "IBM Plex Mono",monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(i+1,p[0],p[1]+0.5);
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    });
+    ctx.restore();
+  }
+
+  canvas.addEventListener('click', e=>{
+    const r=canvas.getBoundingClientRect();
+    const px=(e.clientX-r.left)*(doc.pageW/r.width);
+    const py=(e.clientY-r.top)*(doc.pageH/r.height);
+    const hit=blocksTyped.slice().reverse().find(b=>px>=b.x-3&&px<=b.x+b.w+3&&py>=b.y-3&&py<=b.y+b.h+3);
+    selectBlock(hit?hit.id:null);
+  });
+
+  function findPath(node,id,trail){
+    trail=trail.concat([node]);
+    if (node.id===id) return trail;
+    for (const c of (node.children||[])){ const r=findPath(c,id,trail); if(r) return r; }
+    return null;
+  }
+
+  function escapeHtml(s){ return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function selectBlock(id){
+    selectedId=id;
+    document.getElementById('stSel').textContent=id===null?'—':('#'+id);
+    drawAll(); renderTreeSelection(); renderRawSelection();
+    const detail=document.getElementById('detailBox');
+    if (id===null){ detail.innerHTML='<span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>'; return; }
+    const b=blocksTyped.find(x=>x.id===id);
+    const trail=findPath(hierarchy,id,[])||[];
+    const crumbs=trail.slice(1,-1).map(n=>n.label).join('  ›  ')||'Document root';
+    detail.innerHTML='<span class="type-tag" style="background:'+TYPES[b.type].color+'">'+TYPES[b.type].label+'</span>'+
+      '<span class="crumb">'+crumbs+'</span>'+
+      '<div class="text">'+escapeHtml(b.text.replace(/\n/g,' '))+'</div>'+
+      '<div class="coords">page '+b.page+' · x:'+Math.round(b.x)+' y:'+Math.round(b.y)+' w:'+Math.round(b.w)+' h:'+Math.round(b.h)+' · '+b.fontSize+'px</div>';
+  }
+
+  function renderTree(){
+    const out=document.getElementById('treeOut');
+    out.innerHTML='';
+    out.appendChild(renderNode(hierarchy,0));
+  }
+
+  function renderNode(node){
+    const wrap=document.createElement('div'); wrap.className='node'; wrap.dataset.id=node.id;
+    const row=document.createElement('div'); row.className='node-row';
+    const hasKids=node.children&&node.children.length;
+    const twist=document.createElement('span'); twist.className='twist'; twist.textContent=hasKids?'▾':'·'; row.appendChild(twist);
+    if (node.type!=='document'){ const dot=document.createElement('span'); dot.className='dot'; dot.style.background=TYPES[node.type]?TYPES[node.type].color:'#888'; row.appendChild(dot); }
+    const label=document.createElement('span'); label.className='label';
+    const main=document.createElement('div'); main.textContent=node.label; label.appendChild(main);
+    if (node.type!=='document'){ const small=document.createElement('small'); small.textContent=TYPES[node.type]?TYPES[node.type].label:node.type; label.appendChild(small); }
+    row.appendChild(label);
+    row.addEventListener('click', e=>{ e.stopPropagation(); if(node.type!=='document') selectBlock(node.id); });
+    twist.addEventListener('click', e=>{ e.stopPropagation(); if(hasKids) wrap.classList.toggle('collapsed'); });
+    wrap.appendChild(row);
+    if (hasKids){ const kids=document.createElement('div'); kids.className='children'; node.children.forEach(c=>kids.appendChild(renderNode(c))); wrap.appendChild(kids); }
+    return wrap;
+  }
+
+  function renderTreeSelection(){
+    document.querySelectorAll('.node-row').forEach(r=>r.classList.remove('selected'));
+    if (selectedId===null) return;
+    const w=document.querySelector('.node[data-id="'+selectedId+'"]');
+    if (w){ w.querySelector('.node-row').classList.add('selected'); w.scrollIntoView({block:'nearest'}); }
+  }
+
+  function renderRaw(){
+    const out=document.getElementById('rawOut'); out.innerHTML='';
+    const seq=useXY?xyOrder:naiveSeq;
+    seq.forEach((b,i)=>{
+      const row=document.createElement('div'); row.className='rawrow'; row.dataset.id=b.id;
+      row.innerHTML='<span class="idx">'+(i+1)+'</span><span class="ty" style="color:'+TYPES[b.type].color+'">'+TYPES[b.type].label+'</span><span class="tx">'+escapeHtml(b.text.replace(/\n/g,' '))+'</span>';
+      row.addEventListener('click',()=>selectBlock(b.id));
+      out.appendChild(row);
+    });
+  }
+
+  function renderRawSelection(){
+    document.querySelectorAll('.rawrow').forEach(r=>r.style.background=(String(selectedId)===r.dataset.id?'rgba(79,184,201,.16)':''));
+  }
+
+  function toJson(node){ const o={type:node.type,label:node.label}; if(node.block) o.bbox={page:node.block.page,x:node.block.x,y:node.block.y,w:node.block.w,h:node.block.h}; if(node.children&&node.children.length) o.children=node.children.map(toJson); return o; }
+
+  function renderJson(){ document.getElementById('jsonOut').textContent=JSON.stringify(toJson(hierarchy),null,2); }
+
+  document.getElementById('btnCopyJson').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify(toJson(hierarchy),null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='specstream-hierarchy.json'; a.click();
+  });
+
+  function renderLegend(){
+    const el=document.getElementById('legend'); el.innerHTML='';
+    Object.entries(TYPES).forEach(([key,val])=>{
+      const chip=document.createElement('div'); chip.className='chip'+(activeFilters.has(key)?' on':'');
+      chip.innerHTML='<span class="dot" style="background:'+val.color+'"></span>'+val.label;
+      chip.addEventListener('click',()=>{ if(activeFilters.has(key)) activeFilters.delete(key); else activeFilters.add(key); renderLegend(); drawAll(); });
+      el.appendChild(chip);
+    });
+  }
+
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelector('.tabpane[data-tab="'+tab.dataset.tab+'"]').classList.add('active');
+    });
+  });
+
+  document.getElementById('btnXYCut').addEventListener('click',()=>{ useXY=true; document.getElementById('btnXYCut').classList.add('active'); document.getElementById('btnNaive').classList.remove('active'); renderRaw(); drawAll(); });
+  document.getElementById('btnNaive').addEventListener('click',()=>{ useXY=false; document.getElementById('btnNaive').classList.add('active'); document.getElementById('btnXYCut').classList.remove('active'); renderRaw(); drawAll(); });
+  document.getElementById('btnBoxes').addEventListener('click',function(){ showBoxes=!showBoxes; this.textContent='Bounding boxes: '+(showBoxes?'ON':'OFF'); this.classList.toggle('active',showBoxes); drawAll(); });
+  document.getElementById('btnPath').addEventListener('click',function(){ showPath=!showPath; this.textContent='Reading path: '+(showPath?'ON':'OFF'); this.classList.toggle('active',showPath); drawAll(); });
+
+  document.getElementById('btnSample').addEventListener('click',()=>{
+    document.getElementById('modeLabel').textContent='SAMPLE DATASHEET';
+    document.getElementById('fileChip').textContent='';
+    document.getElementById('btnSample').classList.add('active');
+    pageImage=null; doc=buildSampleBlocks(); selectedId=null; runPipeline();
+  });
+  document.getElementById('btnUpload').addEventListener('click',()=>document.getElementById('fileInput').click());
+  document.getElementById('fileInput').addEventListener('change', handlePdfUpload);
+
+  let pdfjsReady=null;
+  function loadPdfJs(){
+    if (pdfjsReady) return pdfjsReady;
+    pdfjsReady=new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; resolve(); };
+      s.onerror=()=>reject(new Error('Could not load pdf.js'));
+      document.head.appendChild(s);
+    });
+    return pdfjsReady;
+  }
+
+  async function handlePdfUpload(e){
+    const file=e.target.files[0]; if(!file) return;
+    document.getElementById('fileChip').textContent=file.name+' — parsing…';
+    try{
+      await loadPdfJs();
+      const buf=await file.arrayBuffer();
+      const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+      const page=await pdf.getPage(1);
+      const scale=1.6, viewport=page.getViewport({scale});
+      const off=document.createElement('canvas'); off.width=viewport.width; off.height=viewport.height;
+      await page.render({canvasContext:off.getContext('2d'),viewport}).promise;
+      pageImage=off;
+      const content=await page.getTextContent();
+      const blocks=[]; let id=0;
+      content.items.forEach(item=>{
+        if (!item.str||!item.str.trim()) return;
+        const fs=Math.hypot(item.transform[2],item.transform[3])||10;
+        const p1=viewport.convertToViewportPoint(item.transform[4],item.transform[5]);
+        const w=(item.width||(item.str.length*fs*0.5))*scale;
+        const h=fs*scale*1.15;
+        blocks.push({id:id++,page:1,x:p1[0],y:p1[1]-h*0.8,w,h,fontSize:fs*scale*0.72,text:item.str});
+      });
+      doc={blocks,pageW:viewport.width,pageH:viewport.height,source:'pdf'};
+      document.getElementById('modeLabel').textContent='UPLOADED PDF (HEURISTIC)';
+      document.getElementById('fileChip').textContent=file.name+' — page 1 of '+pdf.numPages;
+      document.getElementById('btnSample').classList.remove('active');
+      selectedId=null; runPipeline();
+    } catch(err){
+      document.getElementById('fileChip').textContent='Could not parse — '+err.message;
+    }
+  }
+
+  doc=buildSampleBlocks();
+  runPipeline();
+
+})();
+</script>
+</body>
+</html>

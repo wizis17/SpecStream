@@ -17,11 +17,13 @@ def classify_block(text, font_size, body_font_size=None):
         return {'type': 'footnote'}
 
     # Heading: leading numbering pattern
-    # Match patterns like: 1, 1.1, 1.1.1, etc. at the start of the string
-    heading_match = re.match(r'^(\d+(\.\d+)*)\s+', text_stripped)
+    # Match patterns like: 1., 1.1, 1.1.1, etc. at the start of the string
+    heading_match = re.match(r'^(\d+(?:\.\d+)*\.?)\s+', text_stripped)
     if heading_match:
+        # Get the numbering string, strip any trailing dot
+        num_str = heading_match.group(1).rstrip('.')
         # Depth is the number of dot-separated groups
-        depth = heading_match.group(1).count('.') + 1
+        depth = num_str.count('.') + 1
         return {'type': 'heading', 'heading_depth': depth}
 
     # Table row: pipe-delimited or otherwise column-aligned text

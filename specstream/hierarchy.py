@@ -28,6 +28,7 @@ def build_hierarchy(classified_items):
             'text': item['text'],
             'bbox': item['bbox'],
             'font_size': item['font_size'],
+            'page': item.get('page', 0),
             'children': []
         }
         if item['type'] == 'heading':
@@ -65,7 +66,9 @@ def export_json_tree(root):
         result = {
             'type': node['type'],
             'label': node['text'],  # using 'label' as per CLAUDE.md's output format
+            'page': node.get('page', 0),
             'bbox': {
+                'page': node.get('page', 0),
                 'x': node['bbox'][0],
                 'y': node['bbox'][1],
                 'w': node['bbox'][2] - node['bbox'][0],
