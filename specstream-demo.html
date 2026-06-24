@@ -1,889 +1,400 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SpecStream — Blueprint &amp; Spec Sheet Segmenter</title>
-  <meta name="description" content="SpecStream: Layout-aware technical datasheet parser with XY-cut reading order and hierarchy tree.">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/jpeg" href="frontend/public/Mint.jpg">
-
-  <!-- IBM Plex fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <!-- PDF.js from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-
-  <style>
-    :root {
-      --bg-deep:      #0c1a26;
-      --bg-panel:     #10222f;
-      --bg-panel-2:   #13283a;
-      --line-cyan:    #4fb8c9;
-      --line-cyan-dim:#2c4f59;
-      --text-primary: #e9f2f4;
-      --text-dim:     #7f97a3;
-      --amber:        #d99a4e;
-      --paper:        #f4f1e9;
-      --paper-edge:   #cfc8b4;
-      --ink:          #23262b;
-
-      /* Block type colors */
-      --c-title:      #1d3557;
-      --c-heading1:   #1f7a83;
-      --c-heading2:   #4a9ba6;
-      --c-spec:       #7b8794;
-      --c-table:      #b5832c;
-      --c-warning:    #c1442d;
-      --c-footnote:   #7d6ba8;
-      --c-subtitle:   #97a1ab;
-
-      --radius: 3px;
-      --font-mono: 'IBM Plex Mono', monospace;
-      --font-sans: 'IBM Plex Sans', sans-serif;
-    }
-
-    /* ─── Reset ─── */
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; }
-
-    body {
-      background: var(--bg-deep);
-      background-image:
-        linear-gradient(var(--line-cyan-dim) 1px, transparent 1px),
-        linear-gradient(90deg, var(--line-cyan-dim) 1px, transparent 1px);
-      background-size: 28px 28px;
-      background-attachment: fixed;
-      color: var(--text-primary);
-      font-family: var(--font-sans);
-      -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
-    }
-
-    ::selection { background: var(--line-cyan); color: #06161e; }
-
-    /* ─── Title Block (Header) ─── */
-    .titleblock {
-      border-bottom: 1px solid var(--line-cyan-dim);
-      background: linear-gradient(180deg, rgba(16,34,47,.9), rgba(16,34,47,.6));
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .titleblock .mark {
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 18px;
-      letter-spacing: .04em;
-      color: var(--text-primary);
-    }
-
-    .titleblock .mark span { color: var(--line-cyan); }
-
-    .titleblock .sub {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-      letter-spacing: .05em;
-      margin-top: 2px;
-    }
-
-    .titleblock .meta {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-dim);
-      text-align: right;
-      line-height: 1.6;
-      letter-spacing: .03em;
-    }
-
-    .titleblock .meta b { color: var(--amber); font-weight: 600; }
-
-    /* ─── Toolbar ─── */
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      padding: 10px 20px;
-      border-bottom: 1px solid var(--line-cyan-dim);
-      background: rgba(12,26,38,.6);
-    }
-
-    /* ─── Buttons ─── */
-    .btn {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: .03em;
-      background: var(--bg-panel-2);
-      border: 1px solid var(--line-cyan-dim);
-      color: var(--text-primary);
-      padding: 7px 12px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: border-color .15s, color .15s, background .15s;
-    }
-
-    .btn:hover { border-color: var(--line-cyan); color: #fff; }
-    .btn.active { background: var(--line-cyan); color: #06161e; border-color: var(--line-cyan); font-weight: 600; }
-
-    /* ─── Segmented button group ─── */
-    .seg {
-      display: flex;
-      border: 1px solid var(--line-cyan-dim);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-
-    .seg .btn { border: none; border-radius: 0; }
-    .seg .btn + .btn { border-left: 1px solid var(--line-cyan-dim); }
-
-    /* ─── Toolbar Divider ─── */
-    .divider { width: 1px; height: 20px; background: var(--line-cyan-dim); margin: 0 4px; }
-
-    /* ─── File Chip ─── */
-    .filechip {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-dim);
-      padding: 0 4px;
-    }
-
-    input[type=file] { display: none; }
-
-    /* ─── Legend Strip ─── */
-    .legend {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      padding: 8px 20px;
-      border-bottom: 1px solid var(--line-cyan-dim);
-      background: rgba(12,26,38,.4);
-    }
-
-    .chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: .03em;
-      color: var(--text-dim);
-      border: 1px solid var(--line-cyan-dim);
-      padding: 4px 8px;
-      border-radius: 12px;
-      cursor: pointer;
-      user-select: none;
-      opacity: .55;
-      transition: opacity .15s;
-    }
-
-    .chip.on { opacity: 1; color: var(--text-primary); }
-    .chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-
-    /* ─── Workspace Grid ─── */
-    .workspace {
-      display: grid;
-      grid-template-columns: 1.55fr 1fr;
-      gap: 16px;
-      padding: 16px 20px;
-    }
-
-    @media (max-width: 880px) {
-      .workspace { grid-template-columns: 1fr; }
-    }
-
-    /* ─── Panel Card ─── */
-    .panel {
-      background: var(--bg-panel);
-      border: 1px solid var(--line-cyan-dim);
-      border-radius: 6px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .panel-head {
-      padding: 9px 14px;
-      border-bottom: 1px solid var(--line-cyan-dim);
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: .06em;
-      color: var(--text-dim);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .panel-head .count { color: var(--line-cyan); }
-
-    /* ─── PDF Stage Area ─── */
-    .stage {
-      padding: 18px;
-      display: flex;
-      justify-content: center;
-      overflow: auto;
-      flex: 1;
-      background:
-        repeating-linear-gradient(0deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px),
-        repeating-linear-gradient(90deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px);
-      position: relative;
-      min-height: 480px;
-    }
-
-    /* ─── Canvas ─── */
-    #pdf-canvas {
-      background: var(--paper);
-      box-shadow: 0 0 0 1px var(--paper-edge), 0 14px 34px rgba(0,0,0,.45);
-      cursor: crosshair;
-      max-width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    /* ─── Overlay for bboxes — sits directly over canvas ─── */
-    .overlay-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    /* ─── Bounding Boxes ─── */
-    .bbox-overlay {
-      position: absolute;
-      border: 1.1px solid;
-      border-radius: 2px;
-      pointer-events: auto;
-      cursor: pointer;
-      transition: all 0.12s ease-in-out;
-      opacity: 0.85;
-    }
-
-    .bbox-overlay:hover,
-    .bbox-overlay.bbox-hover {
-      opacity: 1;
-      border-width: 2px;
-      z-index: 10;
-    }
-
-    .bbox-overlay.bbox-selected {
-      opacity: 1;
-      border-width: 2.5px;
-      z-index: 20;
-    }
-
-    /* ─── Empty state for stage ─── */
-    .stage-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 40px 20px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-dim);
-      text-align: center;
-      gap: 12px;
-    }
-
-    .stage-empty svg { opacity: 0.3; }
-    .stage-empty p { opacity: .6; font-style: italic; }
-
-    /* ─── Detail Strip (Inspector) ─── */
-    .detail {
-      border-top: 1px solid var(--line-cyan-dim);
-      padding: 10px 14px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-dim);
-      min-height: 54px;
-    }
-
-    .detail .empty { color: var(--text-dim); opacity: .6; font-style: italic; }
-
-    .detail .type-tag {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 3px;
-      font-weight: 600;
-      color: #06161e;
-      margin-right: 8px;
-      font-size: 10px;
-      letter-spacing: .04em;
-    }
-
-    .detail .crumb { color: var(--line-cyan); }
-    .detail .text { color: var(--text-primary); margin-top: 5px; }
-    .detail .coords { color: var(--text-dim); margin-top: 4px; font-size: 10px; }
-
-    /* Page nav controls inside panel-head */
-    .page-nav {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .page-nav .btn { padding: 4px 9px; font-size: 10px; }
-
-    .page-indicator {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-dim);
-      min-width: 70px;
-      text-align: center;
-    }
-
-    /* ─── Right Panel Tabs ─── */
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--line-cyan-dim);
-    }
-
-    .tab {
-      flex: 1;
-      padding: 9px 0;
-      text-align: center;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: .04em;
-      color: var(--text-dim);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: color .15s, border-color .15s;
-    }
-
-    .tab.active { color: var(--text-primary); border-bottom-color: var(--line-cyan); }
-
-    .tabpane { display: none; flex: 1; overflow: auto; }
-    .tabpane.active { display: block; }
-
-    /* ─── Tree View ─── */
-    .tree {
-      padding: 10px 8px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-
-    .node { margin: 1px 0; }
-
-    .node-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-      padding: 4px 6px;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-
-    .node-row:hover { background: var(--bg-panel-2); }
-    .node-row.selected { background: rgba(79,184,201,.16); outline: 1px solid var(--line-cyan); }
-
-    .node-row .twist {
-      width: 12px;
-      flex: none;
-      color: var(--text-dim);
-      font-size: 10px;
-      margin-top: 3px;
-      user-select: none;
-    }
-
-    .node-row .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex: none;
-      margin-top: 4px;
-    }
-
-    .node-row .label { color: var(--text-primary); line-height: 1.4; }
-    .node-row .label small { color: var(--text-dim); display: block; font-size: 10px; }
-
-    .children {
-      margin-left: 18px;
-      border-left: 1px dashed var(--line-cyan-dim);
-      padding-left: 6px;
-    }
-
-    .node.collapsed > .children { display: none; }
-
-    /* ─── Raw / Reading Order List ─── */
-    .rawlist {
-      padding: 8px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-    }
-
-    .rawrow {
-      display: grid;
-      grid-template-columns: 26px 90px 1fr;
-      gap: 8px;
-      padding: 5px 6px;
-      border-radius: 3px;
-      cursor: pointer;
-      align-items: start;
-    }
-
-    .rawrow:hover { background: var(--bg-panel-2); }
-    .rawrow.selected { background: rgba(79,184,201,.16); }
-    .rawrow .idx { color: var(--line-cyan); }
-    .rawrow .ty { color: var(--text-dim); }
-    .rawrow .tx { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    /* ─── JSON Pane ─── */
-    .jsonbar {
-      display: flex;
-      justify-content: flex-end;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--line-cyan-dim);
-    }
-
-    pre#json-out {
-      margin: 0;
-      padding: 14px;
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      line-height: 1.5;
-      color: #bfe3ea;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    /* ─── Status Bar ─── */
-    .statusbar {
-      display: flex;
-      gap: 18px;
-      flex-wrap: wrap;
-      padding: 8px 20px;
-      border-top: 1px solid var(--line-cyan-dim);
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-dim);
-    }
-
-    .statusbar b { color: var(--line-cyan); font-weight: 600; }
-
-    /* ─── Footer Note ─── */
-    .footer-note {
-      padding: 14px 20px 26px;
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--text-dim);
-      line-height: 1.6;
-      max-width: 900px;
-    }
-
-    .footer-note b { color: var(--text-primary); }
-
-    /* ─── Custom Scrollbars ─── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg-deep); }
-    ::-webkit-scrollbar-thumb { background: var(--line-cyan-dim); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--line-cyan); }
-
-    /* ─── Modal Styles ─── */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(12, 26, 38, 0.85);
-      backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease-in-out;
-    }
-
-    .modal-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .modal-container {
-      background: var(--bg-panel);
-      border: 2px solid var(--line-cyan);
-      border-radius: 6px;
-      width: 90%;
-      max-width: 800px;
-      max-height: 85vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(79, 184, 201, 0.2);
-      transform: scale(0.95);
-      transition: transform 0.2s ease-in-out;
-    }
-
-    .modal-overlay.open .modal-container {
-      transform: scale(1);
-    }
-
-    .modal-header {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--line-cyan-dim);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--bg-panel-2);
-    }
-
-    .modal-title {
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: 0.05em;
-      color: var(--line-cyan);
-    }
-
-    .modal-close {
-      background: transparent;
-      border: none;
-      color: var(--text-dim);
-      font-family: var(--font-mono);
-      font-size: 18px;
-      cursor: pointer;
-      padding: 0 4px;
-      transition: color 0.15s;
-    }
-
-    .modal-close:hover {
-      color: var(--line-cyan);
-    }
-
-    .modal-body {
-      padding: 24px;
-      overflow-y: auto;
-      font-family: var(--font-sans);
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--text-primary);
-    }
-
-    .modal-body h1, .modal-body h2, .modal-body h3 {
-      font-family: var(--font-mono);
-      color: var(--line-cyan);
-      margin-top: 24px;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-
-    .modal-body h1:first-child { margin-top: 0; }
-    .modal-body h1 { font-size: 18px; border-bottom: 1px solid var(--line-cyan-dim); padding-bottom: 6px; }
-    .modal-body h2 { font-size: 14px; }
-    .modal-body h3 { font-size: 12px; }
-    .modal-body p { margin: 0 0 12px 0; }
-    .modal-body ul, .modal-body ol { margin: 0 0 16px 0; padding-left: 20px; }
-    .modal-body li { margin-bottom: 6px; }
-
-    .modal-body code {
-      font-family: var(--font-mono);
-      background: var(--bg-panel-2);
-      padding: 2px 5px;
-      border-radius: 3px;
-      border: 1px solid var(--line-cyan-dim);
-      font-size: 11px;
-      color: var(--line-cyan);
-    }
-
-    .modal-body pre {
-      background: var(--bg-panel-2);
-      border: 1px solid var(--line-cyan-dim);
-      padding: 12px;
-      border-radius: 4px;
-      overflow-x: auto;
-      margin: 12px 0;
-    }
-
-    .modal-body pre code {
-      background: transparent;
-      border: none;
-      padding: 0;
-      color: var(--text-primary);
-    }
-
-    .modal-body blockquote {
-      margin: 12px 0;
-      padding: 8px 16px;
-      border-left: 3px solid var(--line-cyan);
-      background: rgba(79, 184, 201, 0.05);
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecStream — Blueprint &amp; Spec Sheet Segmenter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0c1a26;
+    --bg-panel:#10222f;
+    --bg-panel-2:#13283a;
+    --line-cyan:#4fb8c9;
+    --line-cyan-dim:#2c4f59;
+    --text-primary:#e9f2f4;
+    --text-dim:#7f97a3;
+    --amber:#d99a4e;
+    --paper:#f4f1e9;
+    --paper-edge:#cfc8b4;
+    --ink:#23262b;
+    --c-title:#1d3557;
+    --c-heading1:#1f7a83;
+    --c-heading2:#4a9ba6;
+    --c-spec:#7b8794;
+    --c-table:#b5832c;
+    --c-warning:#c1442d;
+    --c-footnote:#7d6ba8;
+    --c-subtitle:#97a1ab;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg-deep);
+    background-image:
+      linear-gradient(var(--line-cyan-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-cyan-dim) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-attachment:fixed;
+    color:var(--text-primary);
+    font-family:'IBM Plex Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  ::selection{background:var(--line-cyan);color:#06161e;}
+
+  .titleblock{
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:linear-gradient(180deg, rgba(16,34,47,.9), rgba(16,34,47,.6));
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .titleblock .mark{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:18px;
+    letter-spacing:.04em;
+    color:var(--text-primary);
+  }
+  .titleblock .mark span{color:var(--line-cyan);}
+  .titleblock .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:.05em;
+    margin-top:2px;
+  }
+  .titleblock .meta{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    text-align:right;
+    line-height:1.6;
+    letter-spacing:.03em;
+  }
+  .titleblock .meta b{color:var(--amber);font-weight:600;}
+
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    padding:10px 20px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:rgba(12,26,38,.6);
+  }
+  .btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.03em;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line-cyan-dim);
+    color:var(--text-primary);
+    padding:7px 12px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .btn:hover{border-color:var(--line-cyan);color:#fff;}
+  .btn.active{background:var(--line-cyan);color:#06161e;border-color:var(--line-cyan);font-weight:600;}
+  .seg{
+    display:flex;
+    border:1px solid var(--line-cyan-dim);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .seg .btn{border:none;border-radius:0;}
+  .seg .btn+.btn{border-left:1px solid var(--line-cyan-dim);}
+  .divider{width:1px;height:20px;background:var(--line-cyan-dim);margin:0 4px;}
+  .filechip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    padding:0 4px;
+  }
+  input[type=file]{display:none;}
+
+  .legend{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    padding:8px 20px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    background:rgba(12,26,38,.4);
+  }
+  .chip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:.03em;
+    color:var(--text-dim);
+    border:1px solid var(--line-cyan-dim);
+    padding:4px 8px;
+    border-radius:12px;
+    cursor:pointer;
+    user-select:none;
+    opacity:.55;
+    transition:opacity .15s;
+  }
+  .chip.on{opacity:1;color:var(--text-primary);}
+  .chip .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+
+  .workspace{
+    display:grid;
+    grid-template-columns:1.55fr 1fr;
+    gap:16px;
+    padding:16px 20px;
+  }
+  @media (max-width:880px){
+    .workspace{grid-template-columns:1fr;}
+  }
+  .panel{
+    background:var(--bg-panel);
+    border:1px solid var(--line-cyan-dim);
+    border-radius:6px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .panel-head{
+    padding:9px 14px;
+    border-bottom:1px solid var(--line-cyan-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--text-dim);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .panel-head .count{color:var(--line-cyan);}
+
+  .stage{
+    padding:18px;
+    display:flex;
+    justify-content:center;
+    overflow:auto;
+    background:
+      repeating-linear-gradient(0deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(79,184,201,.05) 0 1px, transparent 1px 24px);
+  }
+  #pageCanvas{
+    background:var(--paper);
+    box-shadow:0 0 0 1px var(--paper-edge), 0 14px 34px rgba(0,0,0,.45);
+    cursor:crosshair;
+    max-width:100%;
+    height:auto;
+  }
+
+  .detail{
+    border-top:1px solid var(--line-cyan-dim);
+    padding:10px 14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    min-height:54px;
+  }
+  .detail .empty{color:var(--text-dim);opacity:.6;font-style:italic;}
+  .detail .type-tag{
+    display:inline-block;
+    padding:2px 7px;
+    border-radius:3px;
+    font-weight:600;
+    color:#06161e;
+    margin-right:8px;
+    font-size:10px;
+    letter-spacing:.04em;
+  }
+  .detail .crumb{color:var(--line-cyan);}
+  .detail .text{color:var(--text-primary);margin-top:5px;}
+  .detail .coords{color:var(--text-dim);margin-top:4px;font-size:10px;}
+
+  .tabs{display:flex;border-bottom:1px solid var(--line-cyan-dim);}
+  .tab{
+    flex:1;
+    padding:9px 0;
+    text-align:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:.04em;
+    color:var(--text-dim);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  .tab.active{color:var(--text-primary);border-bottom-color:var(--line-cyan);}
+  .tabpane{display:none;flex:1;overflow:auto;}
+  .tabpane.active{display:block;}
+
+  .tree{padding:10px 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .node{margin:1px 0;}
+  .node-row{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    padding:4px 6px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .node-row:hover{background:var(--bg-panel-2);}
+  .node-row.selected{background:rgba(79,184,201,.16);outline:1px solid var(--line-cyan);}
+  .node-row .twist{width:12px;flex:none;color:var(--text-dim);font-size:10px;margin-top:3px;user-select:none;}
+  .node-row .dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:4px;}
+  .node-row .label{color:var(--text-primary);line-height:1.4;}
+  .node-row .label small{color:var(--text-dim);display:block;font-size:10px;}
+  .children{margin-left:18px;border-left:1px dashed var(--line-cyan-dim);padding-left:6px;}
+  .node.collapsed > .children{display:none;}
+
+  .rawlist{padding:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .rawrow{
+    display:grid;
+    grid-template-columns:26px 90px 1fr;
+    gap:8px;
+    padding:5px 6px;
+    border-radius:3px;
+    cursor:pointer;
+    align-items:start;
+  }
+  .rawrow:hover{background:var(--bg-panel-2);}
+  .rawrow .idx{color:var(--line-cyan);}
+  .rawrow .ty{color:var(--text-dim);}
+  .rawrow .tx{color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  pre#jsonOut{
+    margin:0;
+    padding:14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    line-height:1.5;
+    color:#bfe3ea;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .jsonbar{
+    display:flex;justify-content:flex-end;padding:8px 12px;border-bottom:1px solid var(--line-cyan-dim);
+  }
+
+  .statusbar{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:8px 20px;
+    border-top:1px solid var(--line-cyan-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+  }
+  .statusbar b{color:var(--line-cyan);font-weight:600;}
+  .footer-note{
+    padding:14px 20px 26px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--text-dim);
+    line-height:1.6;
+    max-width:900px;
+  }
+  .footer-note b{color:var(--text-primary);}
+</style>
 </head>
 <body>
 
-  <!-- ═══ TITLE BLOCK ═══ -->
   <div class="titleblock">
     <div>
       <div class="mark">SPEC<span>STREAM</span></div>
       <div class="sub">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER</div>
     </div>
-    <div style="display: flex; align-items: center; gap: 20px;">
-      <a href="#" id="open-docs" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1;">DOCUMENTATION</a>
-      <a href="https://github.com/wizis17/SpecStream" target="_blank" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1; display: flex; align-items: center; gap: 6px;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;">
-          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-        </svg>GITHUB
-      </a>
-      <img src="frontend/public/Mint.jpg" alt="PFP" style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-cyan); object-fit: cover; display: block;">
-      <div class="meta">
-        MODE: <b id="mode-label">READY</b><br>
-        SHEET: <b id="page-indicator">— / —</b> &nbsp; SCALE: 1:1
-      </div>
+    <div class="meta">
+      MODE: <b id="modeLabel">SAMPLE DATASHEET</b><br>
+      SHEET: <b>1 / 1</b> &nbsp; SCALE: 1:1
     </div>
   </div>
 
-  <!-- ═══ TOOLBAR ═══ -->
   <div class="toolbar">
-    <div class="file-upload-wrapper">
-      <button class="btn" id="upload-label">Upload PDF</button>
-      <input type="file" id="pdf-upload" accept=".pdf">
-    </div>
-    <button id="use-test-pdf" class="btn">Load sample datasheet</button>
-    <span class="filechip" id="file-chip"></span>
+    <button class="btn active" id="btnSample">Load sample datasheet</button>
+    <button class="btn" id="btnUpload">Upload PDF (experimental)</button>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <span class="filechip" id="fileChip"></span>
     <div class="divider"></div>
     <div class="seg">
-      <button class="btn" id="btn-naive">Naive scan order</button>
-      <button class="btn active" id="btn-xycut">XY-cut order</button>
+      <button class="btn" id="btnNaive">Naive scan order</button>
+      <button class="btn active" id="btnXYCut">XY-cut order</button>
     </div>
     <div class="divider"></div>
-    <button id="process-btn" class="btn active">Process Layout</button>
+    <button class="btn active" id="btnBoxes">Bounding boxes: ON</button>
+    <button class="btn active" id="btnPath">Reading path: ON</button>
   </div>
 
-  <!-- ═══ LEGEND ═══ -->
   <div class="legend" id="legend"></div>
 
-  <!-- ═══ WORKSPACE ═══ -->
   <div class="workspace">
 
-    <!-- Left: PDF Viewer Panel -->
     <div class="panel">
       <div class="panel-head">
         <span>PAGE VIEWER — INTERACTIVE SOURCE HIGHLIGHTS</span>
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div class="page-nav" id="page-nav" style="display:none;">
-            <button id="prev-page" class="btn">◀ Prev</button>
-            <span class="page-indicator" id="page-nav-label">—</span>
-            <button id="next-page" class="btn">Next ▶</button>
-          </div>
-          <span class="count" id="block-count">— blocks</span>
-        </div>
+        <span class="count" id="blockCount">— blocks</span>
       </div>
-
-      <!-- Stage: canvas + overlay wrapper -->
-      <div class="stage" id="stage">
-        <!-- Empty state -->
-        <div class="stage-empty" id="stage-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <p>Upload a PDF or load the sample datasheet to begin.</p>
-        </div>
-
-        <!-- PDF canvas (hidden until loaded) -->
-        <div id="canvas-wrapper" style="position:relative; display:none;">
-          <canvas id="pdf-canvas"></canvas>
-          <div class="overlay-layer" id="overlay-container"></div>
-        </div>
+      <div class="stage">
+        <canvas id="pageCanvas" width="1190" height="700"></canvas>
       </div>
-
-      <!-- Detail / Inspector strip -->
-      <div class="detail" id="detail-box">
-        <span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>
-      </div>
+      <div class="detail" id="detailBox"><span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span></div>
     </div>
 
-    <!-- Right: Outline / Tree Panel -->
     <div class="panel">
       <div class="tabs">
         <div class="tab active" data-tab="tree">Hierarchy</div>
         <div class="tab" data-tab="raw">Reading order</div>
         <div class="tab" data-tab="json">JSON</div>
       </div>
-
       <div class="tabpane active" data-tab="tree">
-        <div class="tree" id="tree-out">
-          <div style="padding:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); font-style:italic; opacity:.6;">
-            Outline will appear after processing.
-          </div>
-        </div>
+        <div class="tree" id="treeOut"></div>
       </div>
-
       <div class="tabpane" data-tab="raw">
-        <div class="rawlist" id="raw-out"></div>
+        <div class="rawlist" id="rawOut"></div>
       </div>
-
       <div class="tabpane" data-tab="json">
-        <div class="jsonbar">
-          <button class="btn" id="btn-copy-json">Download JSON</button>
-        </div>
-        <pre id="json-out"></pre>
+        <div class="jsonbar"><button class="btn" id="btnCopyJson">Download JSON</button></div>
+        <pre id="jsonOut"></pre>
       </div>
     </div>
 
-  </div><!-- /workspace -->
+  </div>
 
-  <!-- ═══ STATUS BAR ═══ -->
   <div class="statusbar">
-    <span>BLOCKS: <b id="st-blocks">—</b></span>
-    <span>PAGES: <b id="st-pages">—</b></span>
-    <span>TIME: <b id="st-time">—</b></span>
-    <span>SELECTED: <b id="st-sel">—</b></span>
-    <span>STATUS: <b id="st-status">Ready</b></span>
+    <span>BLOCKS: <b id="stBlocks">—</b></span>
+    <span>HORIZONTAL CUTS: <b id="stHCuts">—</b></span>
+    <span>VERTICAL CUTS: <b id="stVCuts">—</b></span>
+    <span>MAX DEPTH: <b id="stDepth">—</b></span>
+    <span>SELECTED: <b id="stSel">—</b></span>
   </div>
 
-  <!-- ═══ FOOTER ═══ -->
   <div class="footer-note">
-    <b>How to use —</b> upload a PDF or load the sample datasheet, then click "Process Layout" to run the XY-cut layout parser. Toggle between XY-cut and Naive scan order to compare reading sequences. Click any bounding box or tree node to inspect its type and position.
-  </div>
-
-  <!-- ═══ DOCUMENTATION MODAL ═══ -->
-  <div class="modal-overlay" id="docs-modal">
-    <div class="modal-container">
-      <div class="modal-header">
-        <span class="modal-title">SPECSTREAM // SYSTEM_MANUAL.md</span>
-        <button class="modal-close" id="close-docs">&times;</button>
-      </div>
-      <div class="modal-body">
-        <h1>📐 SpecStream Technical System Manual</h1>
-        <p>SpecStream is a layout-aware PDF document parser designed specifically for technical datasheets, blueprints, and engineering spec sheets.</p>
-        
-        <h2>1. The Problem Statement</h2>
-        <p>Standard PDF text extraction reads character streams in raw flow order. When encountering multi-column text blocks or sidebar specs, the stream bleeds left-to-right across columns, resulting in interleaved text that completely destroys the logical reading sequence. Standard extractors also strip all semantic layout hierarchies, converting headings, tables, footnotes, and warnings into flat, undifferentiated lines.</p>
-        
-        <h2>2. Dynamic XY-Cut Partitioning Algorithm</h2>
-        <p>SpecStream resolves multi-column bleeding by executing a recursive spatial division algorithm based on projection profiles:</p>
-        <ul>
-          <li><strong>Horizontal Projection Profiles:</strong> The engine merges all bounding box <code>y-intervals</code> across the page to find continuous horizontal whitespace gaps larger than the gap threshold (<code>H_GAP</code>). If found, the page is divided into top and bottom bands, and the parser recurses on each band.</li>
-          <li><strong>Vertical Projection Profiles:</strong> If no horizontal cut is possible, the engine merges the <code>x-intervals</code> to find vertical whitespace columns larger than the gap threshold (<code>V_GAP</code>). If found, it partitions the space into left and right columns and recurses.</li>
-          <li><strong>Fallback:</strong> When no cuts can be made, a leaf node is established. The remaining blocks within that leaf are ordered by top-to-bottom and left-to-right positioning.</li>
-          <li><strong>Dynamic Gap Sizing:</strong> Rather than hardcoding fixed pixel gaps, SpecStream dynamically computes threshold gaps by analyzing the median line height of text components within the document.</li>
-        </ul>
-        
-        <h2>3. Heuristic Semantic Classification</h2>
-        <p>Once a sequence of blocks is ordered, each block is analyzed and tagged with a semantic block category:</p>
-        <ul>
-          <li><code>title</code>: Main document title (typically large font size 18px+).</li>
-          <li><code>subtitle</code>: Auxiliary titles directly below headers.</li>
-          <li><code>heading1</code>: Major sections (matched using section-numbering regex, e.g., <code>1.0</code>, <code>2.0</code>).</li>
-          <li><code>heading2</code>: Subsections (e.g., <code>1.1</code>, <code>2.1.3</code>).</li>
-          <li><code>warning</code>: Highlighted cautionary details matching alert keywords (<code>WARNING</code>, <code>CAUTION</code>, <code>NOTE:</code>, <code>⚠</code>).</li>
-          <li><code>footnote</code>: Metadata or references located at the page foot with small font sizes.</li>
-          <li><code>table-header</code> &amp; <code>table-row</code>: Structured blocks containing column delimiters (<code>|</code>) or uniform spatial tabulations.</li>
-          <li><code>spec</code>: Technical datasheet spec line fallback.</li>
-        </ul>
-
-        <h2>4. Tree Hierarchy Reconstruction</h2>
-        <p>A stack-based assembler iterates over the ordered classified blocks to construct a nested parent-child document tree. Headings act as parent blocks, structural annotations parent their adjacent content blocks, and tables/warnings partition logically. The resulting hierarchy tree is outputted as a standard JSON outline, which can be downloaded directly from the <strong>JSON</strong> tab in the sidebar.</p>
-
-        <h2>5. Interface Controls</h2>
-        <ul>
-          <li><strong>Upload PDF:</strong> Parse layouts from any client-uploaded datasheet dynamically.</li>
-          <li><strong>Load Sample:</strong> Render the built-in blueprint sample document to test structural features.</li>
-          <li><strong>Naive vs. XY-Cut Toggles:</strong> Compare how standard linear streams stack up against structured layout partitions.</li>
-          <li><strong>Legend Badges:</strong> Check/uncheck categories to filter out specific bounding box overlays on the page viewer canvas.</li>
-          <li><strong>Bidirectional Highlighting:</strong> Hover/click elements in the page viewer, hierarchy tree, or reading order list to highlight sync highlights across panels.</li>
-        </ul>
-      </div>
-    </div>
+    <b>How to read this demo —</b> toggle "Naive scan order" to see how a left-to-right, top-to-bottom parser bleeds the two specification columns together. Toggle "XY-cut order" to see the recursive projection-profile cut isolate each column before reading it top-to-bottom. Click any region to see its detected type and its place in the parent-child hierarchy.
   </div>
 
 <script>
 (function(){
 
-  // ─── Type definitions matching main UI ───
   const TYPES = {
-    title:          { label: 'Title',        color: '#1d3557' },
-    subtitle:       { label: 'Subtitle',     color: '#97a1ab' },
-    heading1:       { label: 'Heading L1',   color: '#1f7a83' },
-    heading2:       { label: 'Heading L2',   color: '#4a9ba6' },
-    spec:           { label: 'Spec line',    color: '#8a93a0' },
-    'table-header': { label: 'Table header', color: '#b5832c' },
-    'table-row':    { label: 'Table row',    color: '#caa15a' },
-    warning:        { label: 'Warning',      color: '#c1442d' },
-    footnote:       { label: 'Footnote',     color: '#7d6ba8' },
-    heading:        { label: 'Heading',      color: '#1f7a83' }, // alias
-    table:          { label: 'Table',        color: '#b5832c' }, // alias
+    title:          {label:'Title',         color:'#1d3557'},
+    subtitle:       {label:'Subtitle',      color:'#97a1ab'},
+    heading1:       {label:'Heading L1',    color:'#1f7a83'},
+    heading2:       {label:'Heading L2',    color:'#4a9ba6'},
+    spec:           {label:'Spec line',     color:'#8a93a0'},
+    'table-header': {label:'Table header',  color:'#b5832c'},
+    'table-row':    {label:'Table row',     color:'#caa15a'},
+    warning:        {label:'Warning',       color:'#c1442d'},
+    footnote:       {label:'Footnote',      color:'#7d6ba8'},
   };
 
-  // ─── State ───
-  let pdfDoc = null;
-  let currentPage = 1;
-  let pagesMeta = []; // [{ width, height }]
-  let currentDoc = null; // { source: 'sample'|'pdf', blocks: [...] }
-  let docProcessed = false;
-
-  let parsedHierarchy = null;
-  let flatNodes = [];
-  let selectedId = null;
-  let renderScale = 1;
-  let useXY = true;
-  let activeFilters = new Set(Object.keys(TYPES));
-
-  // ─── DOM Elements ───
-  const pdfUpload       = document.getElementById('pdf-upload');
-  const uploadLabel     = document.getElementById('upload-label');
-  const useTestPdfBtn   = document.getElementById('use-test-pdf');
-  const processBtn      = document.getElementById('process-btn');
-  const btnNaive        = document.getElementById('btn-naive');
-  const btnXYCut        = document.getElementById('btn-xycut');
-  const fileChip        = document.getElementById('file-chip');
-  const modeLabel       = document.getElementById('mode-label');
-  const pageIndicator   = document.getElementById('page-indicator');
-  const pageNav         = document.getElementById('page-nav');
-  const pageNavLabel    = document.getElementById('page-nav-label');
-  const prevPageBtn     = document.getElementById('prev-page');
-  const nextPageBtn     = document.getElementById('next-page');
-  const blockCount      = document.getElementById('block-count');
-  const stageEl         = document.getElementById('stage');
-  const stageEmpty      = document.getElementById('stage-empty');
-  const canvasWrapper   = document.getElementById('canvas-wrapper');
-  const pdfCanvas       = document.getElementById('pdf-canvas');
-  const overlayContainer= document.getElementById('overlay-container');
-  const detailBox       = document.getElementById('detail-box');
-  const legendEl        = document.getElementById('legend');
-  const treeOut         = document.getElementById('tree-out');
-  const rawOut          = document.getElementById('raw-out');
-  const jsonOut         = document.getElementById('json-out');
-  const btnCopyJson     = document.getElementById('btn-copy-json');
-  const stBlocks        = document.getElementById('st-blocks');
-  const stPages         = document.getElementById('st-pages');
-  const stTime          = document.getElementById('st-time');
-  const stSel           = document.getElementById('st-sel');
-  const stStatus        = document.getElementById('st-status');
-
-  // Docs modal
-  const openDocsBtn     = document.getElementById('open-docs');
-  const closeDocsBtn    = document.getElementById('close-docs');
-  const docsModal       = document.getElementById('docs-modal');
-
-  // Configure PDF.js worker
-  if (typeof pdfjsLib !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-  }
-
-  function setStatus(msg) {
-    if (stStatus) stStatus.textContent = msg;
-  }
-
-  // ─── Generate Synthetic sample data ───
   function buildSampleBlocks(){
     const B = []; let id = 0;
-    const add = (x,y,w,h,fs,text) => B.push({id:id++,page:0,x,y,w,h,fontSize:fs,text});
+    const add = (x,y,w,h,fs,text) => B.push({id:id++,page:1,x,y,w,h,fontSize:fs,text});
     add(40,24,600,22,20,'MCU-7400 SERIES — INDUSTRIAL MICROCONTROLLER');
     add(40,54,500,14,12,'Technical Datasheet · Revision 3.2 · June 2026');
     add(40,110,360,14,15,'1. Electrical Characteristics');
@@ -912,10 +423,9 @@
     add(440,352,360,14,11,'ESD Rating (HBM/CDM) ........... ±4kV / ±1.5kV²');
     add(40,420,740,14,9.5,'¹ See Section 1.2 — Absolute Maximum Ratings — for full derating curves.');
     add(40,438,740,14,9.5,'² Tested per JESD22-A114 (HBM) and JESD22-C101 (CDM) standards.');
-    return B;
+    return {blocks:B, pageW:850, pageH:500, source:'sample'};
   }
 
-  // ─── Classification heuristic ───
   function classify(text, fontSize){
     const t = text.replace(/\n/g,' ').trim();
     if (/^[⚠]|^CAUTION\b|^WARNING\b|^NOTE:/i.test(t)) return 'warning';
@@ -928,7 +438,9 @@
     return 'spec';
   }
 
-  // ─── Projection profiles layout segmenter ───
+  const H_GAP = 16, V_GAP = 18;
+  let cutStats = {h:0, v:0};
+
   function mergedGaps(intervals, minGap){
     if (!intervals.length) return [];
     const sorted = intervals.slice().sort((a,b)=>a[0]-b[0]);
@@ -946,30 +458,29 @@
     return gaps;
   }
 
-  function xyCut(blocks, budget, hGap = 16, vGap = 18){
+  function xyCut(blocks, budget){
     if (blocks.length <= 1 || budget <= 0) return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
-    const hGaps = mergedGaps(blocks.map(b=>[b.y, b.y+b.h]), hGap);
+    const hGaps = mergedGaps(blocks.map(b=>[b.y, b.y+b.h]), H_GAP);
     if (hGaps.length){
+      cutStats.h++;
       const cut = hGaps[0];
       const top = blocks.filter(b=>b.y+b.h <= cut[0]+0.5);
       const bot = blocks.filter(b=>b.y >= cut[1]-0.5);
-      return [...xyCut(top, budget-1, hGap, vGap), ...xyCut(bot, budget-1, hGap, vGap)];
+      return [...xyCut(top, budget-1), ...xyCut(bot, budget-1)];
     }
-    const vGaps = mergedGaps(blocks.map(b=>[b.x, b.x+b.w]), vGap);
+    const vGaps = mergedGaps(blocks.map(b=>[b.x, b.x+b.w]), V_GAP);
     if (vGaps.length){
+      cutStats.v++;
       const cut = vGaps[0];
       const left = blocks.filter(b=>b.x+b.w <= cut[0]+0.5);
       const right = blocks.filter(b=>b.x >= cut[1]-0.5);
-      return [...xyCut(left, budget-1, hGap, vGap), ...xyCut(right, budget-1, hGap, vGap)];
+      return [...xyCut(left, budget-1), ...xyCut(right, budget-1)];
     }
     return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
   }
 
-  function naiveOrder(blocks){
-    return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
-  }
+  function naiveOrder(blocks){ return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x); }
 
-  // ─── Stack-based hierarchy builder ───
   function buildHierarchy(ordered){
     const root = {id:'root', type:'document', label:'Document', children:[]};
     let titleNode = null, footnoteGroup = null;
@@ -988,707 +499,255 @@
     return root;
   }
 
-  // ─── Rendering functions ───
-  async function renderPage(num) {
-    currentPage = num;
-    overlayContainer.innerHTML = '';
+  function maxDepth(node, d=0){ if(!node.children||!node.children.length) return d; return Math.max(...node.children.map(c=>maxDepth(c,d+1))); }
 
-    if (!currentDoc) return;
+  let doc=null, blocksTyped=[], xyOrder=[], naiveSeq=[], hierarchy=null;
+  let useXY=true, showBoxes=true, showPath=true;
+  let activeFilters=new Set(Object.keys(TYPES));
+  let selectedId=null, pageImage=null;
 
-    if (currentDoc.source === 'pdf' && pdfDoc) {
-      try {
-        const page = await pdfDoc.getPage(num);
-        const stageWidth = stageEl.clientWidth - 36;
-        const pageW = pagesMeta[num - 1].width;
-        renderScale = Math.min(1.4, stageWidth / pageW);
-        const viewport = page.getViewport({ scale: renderScale });
+  const canvas = document.getElementById('pageCanvas');
+  const ctx = canvas.getContext('2d');
+  const RES = 1.4;
 
-        pdfCanvas.width = viewport.width;
-        pdfCanvas.height = viewport.height;
+  function runPipeline(){
+    blocksTyped = doc.blocks.map(b=>({...b, type:classify(b.text,b.fontSize)}));
+    cutStats={h:0,v:0};
+    xyOrder = xyCut(blocksTyped, 40);
+    naiveSeq = naiveOrder(blocksTyped);
+    hierarchy = buildHierarchy(xyOrder);
+    document.getElementById('blockCount').textContent = blocksTyped.length+' blocks';
+    document.getElementById('stBlocks').textContent = blocksTyped.length;
+    document.getElementById('stHCuts').textContent = cutStats.h;
+    document.getElementById('stVCuts').textContent = cutStats.v;
+    document.getElementById('stDepth').textContent = maxDepth(hierarchy);
+    renderLegend(); renderTree(); renderRaw(); renderJson(); drawAll();
+  }
 
-        const ctx = pdfCanvas.getContext('2d');
-        await page.render({ canvasContext: ctx, viewport }).promise;
+  function setupCanvas(){ canvas.width=doc.pageW*RES; canvas.height=doc.pageH*RES; canvas.style.width=doc.pageW+'px'; canvas.style.height=doc.pageH+'px'; }
 
-        pageIndicator.textContent = `${num} / ${pdfDoc.numPages}`;
-        pageNavLabel.textContent = `${num} / ${pdfDoc.numPages}`;
-      } catch (err) {
-        setStatus(`Error rendering page: ${err.message}`);
-      }
-    } else if (currentDoc.source === 'sample') {
-      const stageWidth = stageEl.clientWidth - 36;
-      const pageW = 850;
-      renderScale = Math.min(1.4, stageWidth / pageW);
+  function drawAll(){
+    setupCanvas();
+    ctx.save(); ctx.scale(RES,RES); ctx.clearRect(0,0,doc.pageW,doc.pageH);
+    if (doc.source==='sample'){
+      ctx.fillStyle='#f4f1e9'; ctx.fillRect(0,0,doc.pageW,doc.pageH);
+      ctx.strokeStyle='#cfc8b4'; ctx.lineWidth=1; ctx.strokeRect(0.5,0.5,doc.pageW-1,doc.pageH-1);
+      ctx.strokeStyle='#23262b';
+      ctx.beginPath(); ctx.moveTo(40,82); ctx.lineTo(doc.pageW-40,82); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(40,408); ctx.lineTo(doc.pageW-40,408); ctx.stroke();
+      drawSampleText();
+    } else if (pageImage){ ctx.drawImage(pageImage,0,0,doc.pageW,doc.pageH); }
+    if (showBoxes) drawBoxes();
+    if (showPath) drawPath();
+    ctx.restore();
+  }
 
-      pdfCanvas.width = 850 * renderScale;
-      pdfCanvas.height = 500 * renderScale;
+  function drawSampleText(){
+    ctx.textBaseline='top';
+    blocksTyped.forEach(b=>{
+      ctx.font=(b.type.startsWith('heading')||b.type==='title'?'600 ':'400 ')+b.fontSize+'px "IBM Plex Mono",monospace';
+      ctx.fillStyle=b.type==='warning'?'#8a2f1f':(b.type==='footnote'?'#5b5347':'#23262b');
+      b.text.split('\n').forEach((line,i)=>ctx.fillText(line,b.x,b.y+i*14));
+    });
+  }
 
-      const ctx = pdfCanvas.getContext('2d');
+  function drawBoxes(){
+    blocksTyped.forEach(b=>{
+      if (!activeFilters.has(b.type)) return;
+      const c=TYPES[b.type].color;
       ctx.save();
-      ctx.scale(renderScale, renderScale);
-
-      // Render sample datasheet background
-      ctx.fillStyle = '#f4f1e9';
-      ctx.fillRect(0, 0, 850, 500);
-      ctx.strokeStyle = '#cfc8b4';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0.5, 0.5, 849, 499);
-      ctx.strokeStyle = '#23262b';
-      ctx.beginPath(); ctx.moveTo(40, 82); ctx.lineTo(810, 82); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(40, 408); ctx.lineTo(810, 408); ctx.stroke();
-
-      // Render sample sheet text lines
-      ctx.textBaseline = 'top';
-      currentDoc.blocks.forEach(b => {
-        const type = classify(b.text, b.fontSize);
-        ctx.font = (type.startsWith('heading') || type === 'title' ? '600 ' : '400 ') + b.fontSize + 'px "IBM Plex Mono",monospace';
-        ctx.fillStyle = type === 'warning' ? '#8a2f1f' : (type === 'footnote' ? '#5b5347' : '#23262b');
-        b.text.split('\n').forEach((line, i) => ctx.fillText(line, b.x, b.y + i * 14));
-      });
-
+      ctx.strokeStyle=c; ctx.lineWidth=selectedId===b.id?2.4:1.1;
+      ctx.setLineDash(b.type==='spec'?[3,2]:[]);
+      ctx.globalAlpha=selectedId===null||selectedId===b.id?0.95:0.35;
+      ctx.strokeRect(b.x-2,b.y-2,b.w+4,b.h+4);
+      if (selectedId===b.id){ ctx.fillStyle=c; ctx.globalAlpha=0.12; ctx.fillRect(b.x-2,b.y-2,b.w+4,b.h+4); }
       ctx.restore();
-
-      pageIndicator.textContent = '1 / 1';
-      pageNavLabel.textContent = '1 / 1';
-    }
-
-    if (docProcessed) {
-      renderOverlays();
-    }
-  }
-
-  function renderOverlays() {
-    overlayContainer.innerHTML = '';
-    if (!flatNodes.length) return;
-
-    // Sync overlay container dimensions with canvas
-    overlayContainer.style.width = pdfCanvas.width + 'px';
-    overlayContainer.style.height = pdfCanvas.height + 'px';
-
-    const pageIdx = currentPage - 1;
-    flatNodes.forEach(node => {
-      if (!node.block || node.page !== pageIdx) return;
-      const typeInfo = TYPES[node.type] || { color: '#888' };
-      if (!activeFilters.has(node.type)) return;
-
-      const x = node.block.x * renderScale;
-      const y = node.block.y * renderScale;
-      const w = node.block.w * renderScale;
-      const h = node.block.h * renderScale;
-
-      const el = document.createElement('div');
-      el.className = 'bbox-overlay';
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      el.style.width = w + 'px';
-      el.style.height = h + 'px';
-      el.style.borderColor = typeInfo.color;
-      el.style.backgroundColor = typeInfo.color + '1a'; // ~10% fill
-      el.dataset.nodeId = node._id;
-
-      if (node._id === selectedId) {
-        el.classList.add('bbox-selected');
-        el.style.backgroundColor = typeInfo.color + '33';
-      }
-
-      el.addEventListener('mouseenter', () => {
-        el.classList.add('bbox-hover');
-        highlightTreeNode(node._id);
-      });
-      el.addEventListener('mouseleave', () => {
-        el.classList.remove('bbox-hover');
-        unhighlightTreeNode(node._id);
-      });
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectNode(node._id);
-      });
-
-      overlayContainer.appendChild(el);
     });
   }
 
-  function selectNode(id) {
-    selectedId = id;
-    stSel.textContent = id !== null ? ('#' + id) : '—';
-
-    // Reset all overlay highlights
-    document.querySelectorAll('.bbox-overlay').forEach(el => {
-      el.classList.remove('bbox-selected');
-      const nid = el.dataset.nodeId;
-      const node = flatNodes.find(n => n._id == nid);
-      if (node) {
-        const typeInfo = TYPES[node.type] || { color: '#888' };
-        el.style.backgroundColor = typeInfo.color + '1a';
-      }
+  function drawPath(){
+    const seq=useXY?xyOrder:naiveSeq;
+    const pts=seq.map(b=>[b.x+Math.min(b.w,40)*0.15, b.y+b.h/2]);
+    ctx.save();
+    ctx.strokeStyle=useXY?'#3fb8c4':'#e2725b'; ctx.lineWidth=1.4; ctx.globalAlpha=0.75; ctx.setLineDash([5,3]);
+    ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1])); ctx.stroke();
+    ctx.setLineDash([]);
+    pts.forEach((p,i)=>{
+      ctx.beginPath(); ctx.arc(p[0],p[1],7,0,Math.PI*2);
+      ctx.fillStyle=useXY?'#3fb8c4':'#e2725b'; ctx.globalAlpha=0.92; ctx.fill();
+      ctx.fillStyle='#06161e'; ctx.font='700 8.5px "IBM Plex Mono",monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(i+1,p[0],p[1]+0.5);
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     });
-
-    if (id !== null) {
-      const bboxEl = overlayContainer.querySelector(`[data-node-id="${id}"]`);
-      if (bboxEl) {
-        bboxEl.classList.add('bbox-selected');
-        const node = flatNodes.find(n => n._id == id);
-        if (node) {
-          const typeInfo = TYPES[node.type] || { color: '#888' };
-          bboxEl.style.backgroundColor = typeInfo.color + '33';
-        }
-      }
-
-      // Jump page if node belongs to a different page
-      const node = flatNodes.find(n => n._id == id);
-      if (node && node.page + 1 !== currentPage) {
-        currentPage = node.page + 1;
-        renderPage(currentPage);
-      }
-    }
-
-    renderTreeSelection();
-    renderRawSelection();
-    updateDetail(id);
+    ctx.restore();
   }
 
-  function highlightTreeNode(id) {
-    const row = treeOut.querySelector(`.node-row[data-id="${id}"]`);
-    if (row) row.classList.add('selected');
-    const rawRow = rawOut.querySelector(`.rawrow[data-id="${id}"]`);
-    if (rawRow) rawRow.classList.add('selected');
-  }
+  canvas.addEventListener('click', e=>{
+    const r=canvas.getBoundingClientRect();
+    const px=(e.clientX-r.left)*(doc.pageW/r.width);
+    const py=(e.clientY-r.top)*(doc.pageH/r.height);
+    const hit=blocksTyped.slice().reverse().find(b=>px>=b.x-3&&px<=b.x+b.w+3&&py>=b.y-3&&py<=b.y+b.h+3);
+    selectBlock(hit?hit.id:null);
+  });
 
-  function unhighlightTreeNode(id) {
-    if (selectedId == id) return;
-    const row = treeOut.querySelector(`.node-row[data-id="${id}"]`);
-    if (row) row.classList.remove('selected');
-    const rawRow = rawOut.querySelector(`.rawrow[data-id="${id}"]`);
-    if (rawRow) rawRow.classList.remove('selected');
-  }
-
-  function renderTreeSelection() {
-    treeOut.querySelectorAll('.node-row').forEach(r => r.classList.remove('selected'));
-    if (selectedId === null) return;
-    const row = treeOut.querySelector(`.node-row[data-id="${selectedId}"]`);
-    if (row) {
-      row.classList.add('selected');
-      row.scrollIntoView({ block: 'nearest' });
-    }
-  }
-
-  function renderRawSelection() {
-    rawOut.querySelectorAll('.rawrow').forEach(r => {
-      r.classList.toggle('selected', r.dataset.id == selectedId);
-    });
-  }
-
-  function updateDetail(id) {
-    if (id === null) {
-      detailBox.innerHTML = '<span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>';
-      return;
-    }
-    const node = flatNodes.find(n => n._id == id);
-    if (!node) return;
-
-    const typeInfo = TYPES[node.type] || { label: node.type, color: '#888' };
-    const trail = findPath(parsedHierarchy, id) || [];
-    const crumbs = trail.slice(1, -1).map(n => n.label).join('  ›  ') || 'Document root';
-
-    const posStr = node.block
-      ? `page ${node.page + 1} · x:${Math.round(node.block.x)} y:${Math.round(node.block.y)} w:${Math.round(node.block.w)} h:${Math.round(node.block.h)}`
-      : '—';
-
-    detailBox.innerHTML =
-      `<span class="type-tag" style="background:${typeInfo.color}">${typeInfo.label}</span>` +
-      `<span class="crumb">${escapeHtml(crumbs)}</span>` +
-      `<div class="text">${escapeHtml(node.label || '')}</div>` +
-      `<div class="coords">${posStr}</div>`;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])
-    );
-  }
-
-  function findPath(node, id, trail = []) {
-    const here = [...trail, node];
-    if (node._id == id) return here;
-    for (const c of (node.children || [])) {
-      const res = findPath(c, id, here);
-      if (res) return res;
-    }
+  function findPath(node,id,trail){
+    trail=trail.concat([node]);
+    if (node.id===id) return trail;
+    for (const c of (node.children||[])){ const r=findPath(c,id,trail); if(r) return r; }
     return null;
   }
 
-  // ─── Build outlines DOM ───
-  function renderTree(hierarchy) {
-    treeOut.innerHTML = '';
-    if (!hierarchy) return;
-    treeOut.appendChild(renderTreeNode(hierarchy));
+  function escapeHtml(s){ return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function selectBlock(id){
+    selectedId=id;
+    document.getElementById('stSel').textContent=id===null?'—':('#'+id);
+    drawAll(); renderTreeSelection(); renderRawSelection();
+    const detail=document.getElementById('detailBox');
+    if (id===null){ detail.innerHTML='<span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>'; return; }
+    const b=blocksTyped.find(x=>x.id===id);
+    const trail=findPath(hierarchy,id,[])||[];
+    const crumbs=trail.slice(1,-1).map(n=>n.label).join('  ›  ')||'Document root';
+    detail.innerHTML='<span class="type-tag" style="background:'+TYPES[b.type].color+'">'+TYPES[b.type].label+'</span>'+
+      '<span class="crumb">'+crumbs+'</span>'+
+      '<div class="text">'+escapeHtml(b.text.replace(/\n/g,' '))+'</div>'+
+      '<div class="coords">page '+b.page+' · x:'+Math.round(b.x)+' y:'+Math.round(b.y)+' w:'+Math.round(b.w)+' h:'+Math.round(b.h)+' · '+b.fontSize+'px</div>';
   }
 
-  function renderTreeNode(node) {
-    const wrap = document.createElement('div');
-    wrap.className = 'node';
-    wrap.dataset.id = node._id;
+  function renderTree(){
+    const out=document.getElementById('treeOut');
+    out.innerHTML='';
+    out.appendChild(renderNode(hierarchy,0));
+  }
 
-    const row = document.createElement('div');
-    row.className = 'node-row';
-    row.dataset.id = node._id;
-
-    const hasKids = node.children && node.children.length > 0;
-
-    const twist = document.createElement('span');
-    twist.className = 'twist';
-    twist.textContent = hasKids ? '▾' : '·';
-    row.appendChild(twist);
-
-    if (node.type !== 'document') {
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = (TYPES[node.type] || {}).color || '#888';
-      row.appendChild(dot);
-    }
-
-    const labelEl = document.createElement('span');
-    labelEl.className = 'label';
-    const main = document.createElement('div');
-    main.textContent = node.label || node.type;
-    labelEl.appendChild(main);
-
-    if (node.type && node.type !== 'document') {
-      const small = document.createElement('small');
-      small.textContent = (TYPES[node.type] || { label: node.type }).label;
-      labelEl.appendChild(small);
-    }
-    row.appendChild(labelEl);
-
-    row.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (node._id !== undefined && node._id !== 'root') selectNode(node._id);
-    });
-
-    row.addEventListener('mouseenter', () => {
-      const bboxEl = overlayContainer.querySelector(`[data-node-id="${node._id}"]`);
-      if (bboxEl) bboxEl.classList.add('bbox-hover');
-    });
-    row.addEventListener('mouseleave', () => {
-      const bboxEl = overlayContainer.querySelector(`[data-node-id="${node._id}"]`);
-      if (bboxEl && node._id !== selectedId) bboxEl.classList.remove('bbox-hover');
-    });
-
-    twist.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (hasKids) wrap.classList.toggle('collapsed');
-    });
-
+  function renderNode(node){
+    const wrap=document.createElement('div'); wrap.className='node'; wrap.dataset.id=node.id;
+    const row=document.createElement('div'); row.className='node-row';
+    const hasKids=node.children&&node.children.length;
+    const twist=document.createElement('span'); twist.className='twist'; twist.textContent=hasKids?'▾':'·'; row.appendChild(twist);
+    if (node.type!=='document'){ const dot=document.createElement('span'); dot.className='dot'; dot.style.background=TYPES[node.type]?TYPES[node.type].color:'#888'; row.appendChild(dot); }
+    const label=document.createElement('span'); label.className='label';
+    const main=document.createElement('div'); main.textContent=node.label; label.appendChild(main);
+    if (node.type!=='document'){ const small=document.createElement('small'); small.textContent=TYPES[node.type]?TYPES[node.type].label:node.type; label.appendChild(small); }
+    row.appendChild(label);
+    row.addEventListener('click', e=>{ e.stopPropagation(); if(node.type!=='document') selectBlock(node.id); });
+    twist.addEventListener('click', e=>{ e.stopPropagation(); if(hasKids) wrap.classList.toggle('collapsed'); });
     wrap.appendChild(row);
-
-    if (hasKids) {
-      const kids = document.createElement('div');
-      kids.className = 'children';
-      node.children.forEach(c => kids.appendChild(renderTreeNode(c)));
-      wrap.appendChild(kids);
-    }
-
+    if (hasKids){ const kids=document.createElement('div'); kids.className='children'; node.children.forEach(c=>kids.appendChild(renderNode(c))); wrap.appendChild(kids); }
     return wrap;
   }
 
-  function renderRaw(nodes) {
-    rawOut.innerHTML = '';
-    if (!nodes.length) return;
+  function renderTreeSelection(){
+    document.querySelectorAll('.node-row').forEach(r=>r.classList.remove('selected'));
+    if (selectedId===null) return;
+    const w=document.querySelector('.node[data-id="'+selectedId+'"]');
+    if (w){ w.querySelector('.node-row').classList.add('selected'); w.scrollIntoView({block:'nearest'}); }
+  }
 
-    nodes.forEach((node, i) => {
-      const row = document.createElement('div');
-      row.className = 'rawrow';
-      row.dataset.id = node._id;
-
-      const typeInfo = TYPES[node.type] || { label: node.type, color: '#888' };
-
-      row.innerHTML =
-        `<span class="idx">${i + 1}</span>` +
-        `<span class="ty" style="color:${typeInfo.color}">${typeInfo.label}</span>` +
-        `<span class="tx">${escapeHtml(node.label || '')}</span>`;
-
-      row.addEventListener('click', () => selectNode(node._id));
-      rawOut.appendChild(row);
+  function renderRaw(){
+    const out=document.getElementById('rawOut'); out.innerHTML='';
+    const seq=useXY?xyOrder:naiveSeq;
+    seq.forEach((b,i)=>{
+      const row=document.createElement('div'); row.className='rawrow'; row.dataset.id=b.id;
+      row.innerHTML='<span class="idx">'+(i+1)+'</span><span class="ty" style="color:'+TYPES[b.type].color+'">'+TYPES[b.type].label+'</span><span class="tx">'+escapeHtml(b.text.replace(/\n/g,' '))+'</span>';
+      row.addEventListener('click',()=>selectBlock(b.id));
+      out.appendChild(row);
     });
   }
 
-  function toJson(node) {
-    const o = {
-      type: node.type,
-      label: node.label,
-      page: node.page || 0,
-    };
-    if (node.block) {
-      o.bbox = {
-        page: node.page || 0,
-        x: Math.round(node.block.x),
-        y: Math.round(node.block.y),
-        w: Math.round(node.block.w),
-        h: Math.round(node.block.h)
-      };
-    }
-    if (node.children && node.children.length) {
-      o.children = node.children.map(toJson);
-    }
-    return o;
+  function renderRawSelection(){
+    document.querySelectorAll('.rawrow').forEach(r=>r.style.background=(String(selectedId)===r.dataset.id?'rgba(79,184,201,.16)':''));
   }
 
-  function renderLegend() {
-    legendEl.innerHTML = '';
-    Object.entries(TYPES).forEach(([key, val]) => {
-      // Exclude backend aliases from chips list
-      if (key === 'heading' || key === 'table') return;
+  function toJson(node){ const o={type:node.type,label:node.label}; if(node.block) o.bbox={page:node.block.page,x:node.block.x,y:node.block.y,w:node.block.w,h:node.block.h}; if(node.children&&node.children.length) o.children=node.children.map(toJson); return o; }
 
-      const chip = document.createElement('div');
-      chip.className = 'chip' + (activeFilters.has(key) ? ' on' : '');
-      chip.innerHTML = `<span class="dot" style="background:${val.color}"></span>${val.label}`;
-      chip.addEventListener('click', () => {
-        if (activeFilters.has(key)) activeFilters.delete(key);
-        else activeFilters.add(key);
-        renderLegend();
-        renderOverlays();
-      });
-      legendEl.appendChild(chip);
+  function renderJson(){ document.getElementById('jsonOut').textContent=JSON.stringify(toJson(hierarchy),null,2); }
+
+  document.getElementById('btnCopyJson').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify(toJson(hierarchy),null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='specstream-hierarchy.json'; a.click();
+  });
+
+  function renderLegend(){
+    const el=document.getElementById('legend'); el.innerHTML='';
+    Object.entries(TYPES).forEach(([key,val])=>{
+      const chip=document.createElement('div'); chip.className='chip'+(activeFilters.has(key)?' on':'');
+      chip.innerHTML='<span class="dot" style="background:'+val.color+'"></span>'+val.label;
+      chip.addEventListener('click',()=>{ if(activeFilters.has(key)) activeFilters.delete(key); else activeFilters.add(key); renderLegend(); drawAll(); });
+      el.appendChild(chip);
     });
   }
 
-  function flatten(nodes, arr = []) {
-    if (!nodes) return arr;
-    nodes.forEach(n => {
-      if (n.type !== 'document') arr.push(n);
-      if (n.children) flatten(n.children, arr);
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelector('.tabpane[data-tab="'+tab.dataset.tab+'"]').classList.add('active');
     });
-    return arr;
-  }
+  });
 
-  let _idCounter = 0;
-  function assignIds(nodes) {
-    if (!nodes) return;
-    nodes.forEach(n => {
-      n._id = _idCounter++;
-      if (n.children) assignIds(n.children);
-    });
-  }
+  document.getElementById('btnXYCut').addEventListener('click',()=>{ useXY=true; document.getElementById('btnXYCut').classList.add('active'); document.getElementById('btnNaive').classList.remove('active'); renderRaw(); drawAll(); });
+  document.getElementById('btnNaive').addEventListener('click',()=>{ useXY=false; document.getElementById('btnNaive').classList.add('active'); document.getElementById('btnXYCut').classList.remove('active'); renderRaw(); drawAll(); });
+  document.getElementById('btnBoxes').addEventListener('click',function(){ showBoxes=!showBoxes; this.textContent='Bounding boxes: '+(showBoxes?'ON':'OFF'); this.classList.toggle('active',showBoxes); drawAll(); });
+  document.getElementById('btnPath').addEventListener('click',function(){ showPath=!showPath; this.textContent='Reading path: '+(showPath?'ON':'OFF'); this.classList.toggle('active',showPath); drawAll(); });
 
-  // ─── Process layout on client-side ───
-  function processLayout() {
-    if (!currentDoc) {
-      setStatus('Please load sample datasheet or upload a PDF first.');
-      return;
-    }
+  document.getElementById('btnSample').addEventListener('click',()=>{
+    document.getElementById('modeLabel').textContent='SAMPLE DATASHEET';
+    document.getElementById('fileChip').textContent='';
+    document.getElementById('btnSample').classList.add('active');
+    pageImage=null; doc=buildSampleBlocks(); selectedId=null; runPipeline();
+  });
+  document.getElementById('btnUpload').addEventListener('click',()=>document.getElementById('fileInput').click());
+  document.getElementById('fileInput').addEventListener('change', handlePdfUpload);
 
-    setStatus('Processing document structure client-side…');
-    const t0 = performance.now();
-
-    try {
-      // Group items by page number
-      const pages = {};
-      currentDoc.blocks.forEach(b => {
-        const p = b.page || 0;
-        if (!pages[p]) pages[p] = [];
-        // Map types using the classifier heuristic
-        pages[p].push({
-          ...b,
-          type: classify(b.text, b.fontSize)
-        });
-      });
-
-      const orderedItems = [];
-      Object.keys(pages).sort((a,b)=>a-b).forEach(pKey => {
-        const pageItems = pages[pKey];
-        let pageOrdered;
-
-        if (useXY) {
-          // Calculate dynamic gap threshold based on median height
-          const heights = pageItems.map(item => item.h);
-          let suggestedGap = 16;
-          if (heights.length) {
-            const sortedHeights = heights.slice().sort((a,b)=>a-b);
-            const mid = Math.floor(sortedHeights.length / 2);
-            suggestedGap = Math.max(2, Math.round(0.5 * sortedHeights[mid]));
-          }
-          pageOrdered = xyCut(pageItems, 40, suggestedGap, suggestedGap);
-        } else {
-          pageOrdered = naiveOrder(pageItems);
-        }
-        orderedItems.push(...pageOrdered);
-      });
-
-      _idCounter = 0;
-      const hier = buildHierarchy(orderedItems);
-      parsedHierarchy = { _id: 'root', type: 'document', label: 'Document', children: hier.children };
-      assignIds(parsedHierarchy.children);
-      parsedHierarchy._id = 'root';
-
-      flatNodes = flatten(parsedHierarchy.children);
-
-      // Populate UI metrics
-      blockCount.textContent = flatNodes.length + ' blocks';
-      stBlocks.textContent = flatNodes.length;
-      const uniquePages = new Set(flatNodes.map(n => n.page));
-      stPages.textContent = uniquePages.size;
-
-      const elapsed = ((performance.now() - t0) / 1000).toFixed(3);
-      stTime.textContent = elapsed + 's';
-
-      renderLegend();
-      renderTree(parsedHierarchy);
-      renderRaw(flatNodes);
-
-      // Export JSON outline (skipping document root)
-      const exportJson = parsedHierarchy.children.map(toJson);
-      jsonOut.textContent = JSON.stringify(exportJson, null, 2);
-
-      docProcessed = true;
-      renderOverlays();
-
-      setStatus(`Layout parsed — ${flatNodes.length} blocks in ${elapsed}s`);
-      modeLabel.textContent = useXY ? 'XY-CUT ORDER' : 'NAIVE SCAN ORDER';
-    } catch (err) {
-      setStatus(`Error during processing: ${err.message}`);
-      console.error(err);
-    }
-  }
-
-  // ─── Setup dynamic PDF.js loaders ───
-  let pdfjsReady = null;
+  let pdfjsReady=null;
   function loadPdfJs(){
     if (pdfjsReady) return pdfjsReady;
-    pdfjsReady = new Promise((resolve,reject)=>{
-      if (window.pdfjsLib) {
-        resolve();
-      } else {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-        s.onload = () => {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-          resolve();
-        };
-        s.onerror = () => reject(new Error('Could not load pdf.js from CDN'));
-        document.head.appendChild(s);
-      }
+    pdfjsReady=new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; resolve(); };
+      s.onerror=()=>reject(new Error('Could not load pdf.js'));
+      document.head.appendChild(s);
     });
     return pdfjsReady;
   }
 
-  async function loadPdfData(blob, name) {
-    setStatus(`Loading ${name}…`);
-    try {
+  async function handlePdfUpload(e){
+    const file=e.target.files[0]; if(!file) return;
+    document.getElementById('fileChip').textContent=file.name+' — parsing…';
+    try{
       await loadPdfJs();
-      const arrayBuffer = await blob.arrayBuffer();
-      pdfDoc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      currentPage = 1;
-
-      stageEmpty.style.display = 'none';
-      canvasWrapper.style.display = 'block';
-
-      if (pdfDoc.numPages > 1) {
-        pageNav.style.display = 'flex';
-      } else {
-        pageNav.style.display = 'none';
-      }
-
-      // Collect viewport metadata and text blocks for all pages
-      pagesMeta = [];
-      const blocks = [];
-      let globalId = 0;
-
-      for (let p = 1; p <= pdfDoc.numPages; p++) {
-        setStatus(`Extracting text from page ${p} of ${pdfDoc.numPages}…`);
-        const page = await pdfDoc.getPage(p);
-        const viewport = page.getViewport({ scale: 1.0 });
-        pagesMeta.push({ width: viewport.width, height: viewport.height });
-
-        const content = await page.getTextContent();
-        content.items.forEach(item => {
-          if (!item.str || !item.str.trim()) return;
-
-          const fs = Math.hypot(item.transform[2], item.transform[3]) || 10;
-          const p1 = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-          const w = item.width || (item.str.length * fs * 0.5);
-          const h = fs * 1.15;
-
-          blocks.push({
-            id: globalId++,
-            page: p - 1, // 0-indexed page
-            x: p1[0],
-            y: p1[1] - h * 0.8,
-            w: w,
-            h: h,
-            fontSize: fs * 0.72,
-            text: item.str
-          });
-        });
-      }
-
-      currentDoc = { source: 'pdf', blocks: blocks };
-      docProcessed = false;
-      flatNodes = [];
-      selectedId = null;
-
-      // Reset Tree, Raw List, and JSON panels
-      treeOut.innerHTML = `
-        <div style="padding:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); font-style:italic; opacity:.6;">
-          Outline will appear after processing.
-        </div>`;
-      rawOut.innerHTML = '';
-      jsonOut.textContent = '';
-      overlayContainer.innerHTML = '';
-      stBlocks.textContent = '—';
-      blockCount.textContent = '— blocks';
-      stPages.textContent = pdfDoc.numPages;
-      stTime.textContent = '—';
-      stSel.textContent = '—';
-
-      await renderPage(currentPage);
-      setStatus(`${name} loaded — ${pdfDoc.numPages} page(s). Click Process Layout.`);
-      fileChip.textContent = `${name} — ${pdfDoc.numPages} page(s)`;
-    } catch (err) {
-      setStatus(`Error: ${err.message}`);
+      const buf=await file.arrayBuffer();
+      const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+      const page=await pdf.getPage(1);
+      const scale=1.6, viewport=page.getViewport({scale});
+      const off=document.createElement('canvas'); off.width=viewport.width; off.height=viewport.height;
+      await page.render({canvasContext:off.getContext('2d'),viewport}).promise;
+      pageImage=off;
+      const content=await page.getTextContent();
+      const blocks=[]; let id=0;
+      content.items.forEach(item=>{
+        if (!item.str||!item.str.trim()) return;
+        const fs=Math.hypot(item.transform[2],item.transform[3])||10;
+        const p1=viewport.convertToViewportPoint(item.transform[4],item.transform[5]);
+        const w=(item.width||(item.str.length*fs*0.5))*scale;
+        const h=fs*scale*1.15;
+        blocks.push({id:id++,page:1,x:p1[0],y:p1[1]-h*0.8,w,h,fontSize:fs*scale*0.72,text:item.str});
+      });
+      doc={blocks,pageW:viewport.width,pageH:viewport.height,source:'pdf'};
+      document.getElementById('modeLabel').textContent='UPLOADED PDF (HEURISTIC)';
+      document.getElementById('fileChip').textContent=file.name+' — page 1 of '+pdf.numPages;
+      document.getElementById('btnSample').classList.remove('active');
+      selectedId=null; runPipeline();
+    } catch(err){
+      document.getElementById('fileChip').textContent='Could not parse — '+err.message;
     }
   }
 
-  // ─── Event Listeners ───
-
-  uploadLabel.addEventListener('click', () => pdfUpload.click());
-
-  pdfUpload.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    await loadPdfData(file, file.name);
-    modeLabel.textContent = 'UPLOADED PDF';
-  });
-
-  useTestPdfBtn.addEventListener('click', async () => {
-    setStatus('Generating sample datasheet…');
-    pdfDoc = null;
-    currentPage = 1;
-    pagesMeta = [{ width: 850, height: 500 }];
-
-    stageEmpty.style.display = 'none';
-    canvasWrapper.style.display = 'block';
-    pageNav.style.display = 'none';
-
-    currentDoc = {
-      source: 'sample',
-      blocks: buildSampleBlocks()
-    };
-
-    docProcessed = false;
-    flatNodes = [];
-    selectedId = null;
-
-    treeOut.innerHTML = `
-      <div style="padding:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); font-style:italic; opacity:.6;">
-        Outline will appear after processing.
-      </div>`;
-    rawOut.innerHTML = '';
-    jsonOut.textContent = '';
-    overlayContainer.innerHTML = '';
-    stBlocks.textContent = '—';
-    blockCount.textContent = '— blocks';
-    stPages.textContent = '1';
-    stTime.textContent = '—';
-    stSel.textContent = '—';
-
-    await renderPage(currentPage);
-    setStatus('Sample datasheet loaded. Click Process Layout.');
-    fileChip.textContent = 'sample.pdf — 1 page';
-    modeLabel.textContent = 'SAMPLE DATASHEET';
-  });
-
-  processBtn.addEventListener('click', processLayout);
-
-  btnXYCut.addEventListener('click', () => {
-    useXY = true;
-    btnXYCut.classList.add('active');
-    btnNaive.classList.remove('active');
-    if (docProcessed) processLayout();
-  });
-
-  btnNaive.addEventListener('click', () => {
-    useXY = false;
-    btnNaive.classList.add('active');
-    btnXYCut.classList.remove('active');
-    if (docProcessed) processLayout();
-  });
-
-  // Prev / Next Page controls
-  prevPageBtn.addEventListener('click', async () => {
-    if (currentPage > 1) {
-      currentPage--;
-      await renderPage(currentPage);
-    }
-  });
-
-  nextPageBtn.addEventListener('click', async () => {
-    if (pdfDoc && currentPage < pdfDoc.numPages) {
-      currentPage++;
-      await renderPage(currentPage);
-    }
-  });
-
-  // Tabs controls
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tabpane').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      const pane = document.querySelector(`.tabpane[data-tab="${tab.dataset.tab}"]`);
-      if (pane) pane.classList.add('active');
-    });
-  });
-
-  // Download JSON
-  btnCopyJson.addEventListener('click', () => {
-    if (!jsonOut.textContent) return;
-    const blob = new Blob([jsonOut.textContent], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'specstream-hierarchy.json';
-    a.click();
-  });
-
-  // Keyboard navigation
-  window.addEventListener('keydown', (e) => {
-    const tag = document.activeElement?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (e.key === 'ArrowRight') nextPageBtn.click();
-    if (e.key === 'ArrowLeft') prevPageBtn.click();
-    if (e.key === 'Escape') {
-      if (docsModal && docsModal.classList.contains('open')) {
-        docsModal.classList.remove('open');
-      } else {
-        selectNode(null);
-      }
-    }
-  });
-
-  // Documentation modal
-  if (openDocsBtn && closeDocsBtn && docsModal) {
-    openDocsBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      docsModal.classList.add('open');
-    });
-    closeDocsBtn.addEventListener('click', () => {
-      docsModal.classList.remove('open');
-    });
-    docsModal.addEventListener('click', (e) => {
-      if (e.target === docsModal) {
-        docsModal.classList.remove('open');
-      }
-    });
-  }
-
-  // Handle window resizing to keep overlays aligned with scaling canvas
-  window.addEventListener('resize', () => {
-    if (currentDoc) {
-      renderPage(currentPage);
-    }
-  });
-
-  // ─── Initializer ───
-  renderLegend();
-  setStatus('Ready — upload or load a PDF to begin.');
+  doc=buildSampleBlocks();
+  runPipeline();
 
 })();
 </script>
