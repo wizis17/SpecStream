@@ -28,6 +28,7 @@
     --c-footnote:#7d6ba8;
     --c-subtitle:#97a1ab;
     --radius:3px;
+    --font-mono:'IBM Plex Mono',monospace;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;}
@@ -300,6 +301,150 @@
     max-width:900px;
   }
   .footer-note b{color:var(--text-primary);}
+
+  /* ─── Modal Styles ─── */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(12, 26, 38, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal-container {
+    background: var(--bg-panel);
+    border: 2px solid var(--line-cyan);
+    border-radius: 6px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(79, 184, 201, 0.2);
+    transform: scale(0.95);
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .modal-overlay.open .modal-container {
+    transform: scale(1);
+  }
+
+  .modal-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line-cyan-dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-panel-2);
+  }
+
+  .modal-title {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    color: var(--line-cyan);
+  }
+
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color 0.15s;
+  }
+
+  .modal-close:hover {
+    color: var(--line-cyan);
+  }
+
+  .modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+  }
+
+  .modal-body h1, .modal-body h2, .modal-body h3 {
+    font-family: var(--font-mono);
+    color: var(--line-cyan);
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .modal-body h1:first-child {
+    margin-top: 0;
+  }
+
+  .modal-body h1 { font-size: 18px; border-bottom: 1px solid var(--line-cyan-dim); padding-bottom: 6px; }
+  .modal-body h2 { font-size: 14px; }
+  .modal-body h3 { font-size: 12px; }
+
+  .modal-body p {
+    margin: 0 0 12px 0;
+  }
+
+  .modal-body ul, .modal-body ol {
+    margin: 0 0 16px 0;
+    padding-left: 20px;
+  }
+
+  .modal-body li {
+    margin-bottom: 6px;
+  }
+
+  .modal-body code {
+    font-family: var(--font-mono);
+    background: var(--bg-panel-2);
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--line-cyan-dim);
+    font-size: 11px;
+    color: var(--line-cyan);
+  }
+
+  .modal-body pre {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line-cyan-dim);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  .modal-body pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--text-primary);
+  }
+
+  .modal-body blockquote {
+    margin: 12px 0;
+    padding: 8px 16px;
+    border-left: 3px solid var(--line-cyan);
+    background: rgba(79, 184, 201, 0.05);
+  }
 </style>
 </head>
 <body>
@@ -309,9 +454,18 @@
       <div class="mark">SPEC<span>STREAM</span></div>
       <div class="sub">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER</div>
     </div>
-    <div class="meta">
-      MODE: <b id="modeLabel">SAMPLE DATASHEET</b><br>
-      SHEET: <b>1 / 1</b> &nbsp; SCALE: 1:1
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <a href="#" id="open-docs" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1;">DOCUMENTATION</a>
+      <a href="https://github.com/wizis17/SpecStream" target="_blank" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1; display: flex; align-items: center; gap: 6px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>GITHUB
+      </a>
+      <img src="frontend/public/Mint.jpg" alt="PFP" style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-cyan); object-fit: cover; display: block;">
+      <div class="meta">
+        MODE: <b id="modeLabel">SAMPLE DATASHEET</b><br>
+        SHEET: <b>1 / 1</b> &nbsp; SCALE: 1:1
+      </div>
     </div>
   </div>
 
@@ -375,6 +529,57 @@
 
   <div class="footer-note">
     <b>How to read this demo —</b> toggle "Naive scan order" to see how a left-to-right, top-to-bottom parser bleeds the two specification columns together. Toggle "XY-cut order" to see the recursive projection-profile cut isolate each column before reading it top-to-bottom. Click any region to see its detected type and its place in the parent-child hierarchy.
+  </div>
+
+  <!-- ═══ DOCUMENTATION MODAL ═══ -->
+  <div class="modal-overlay" id="docs-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">SPECSTREAM // SYSTEM_MANUAL.md</span>
+        <button class="modal-close" id="close-docs">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h1>📐 SpecStream Technical System Manual</h1>
+        <p>SpecStream is a layout-aware PDF document parser designed specifically for technical datasheets, blueprints, and engineering spec sheets.</p>
+        
+        <h2>1. The Problem Statement</h2>
+        <p>Standard PDF text extraction reads character streams in raw flow order. When encountering multi-column text blocks or sidebar specs, the stream bleeds left-to-right across columns, resulting in interleaved text that completely destroys the logical reading sequence. Standard extractors also strip all semantic layout hierarchies, converting headings, tables, footnotes, and warnings into flat, undifferentiated lines.</p>
+        
+        <h2>2. Dynamic XY-Cut Partitioning Algorithm</h2>
+        <p>SpecStream resolves multi-column bleeding by executing a recursive spatial division algorithm based on projection profiles:</p>
+        <ul>
+          <li><strong>Horizontal Projection Profiles:</strong> The engine merges all bounding box <code>y-intervals</code> across the page to find continuous horizontal whitespace gaps larger than the gap threshold (<code>H_GAP</code>). If found, the page is divided into top and bottom bands, and the parser recurses on each band.</li>
+          <li><strong>Vertical Projection Profiles:</strong> If no horizontal cut is possible, the engine merges the <code>x-intervals</code> to find vertical whitespace columns larger than the gap threshold (<code>V_GAP</code>). If found, it partitions the space into left and right columns and recurses.</li>
+          <li><strong>Fallback:</strong> When no cuts can be made, a leaf node is established. The remaining blocks within that leaf are ordered by top-to-bottom and left-to-right positioning.</li>
+          <li><strong>Dynamic Gap Sizing:</strong> Rather than hardcoding fixed pixel gaps, SpecStream dynamically computes threshold gaps by analyzing the median line height of text components within the document.</li>
+        </ul>
+        
+        <h2>3. Heuristic Semantic Classification</h2>
+        <p>Once a sequence of blocks is ordered, each block is analyzed and tagged with a semantic block category:</p>
+        <ul>
+          <li><code>title</code>: Main document title (typically large font size 18px+).</li>
+          <li><code>subtitle</code>: Auxiliary titles directly below headers.</li>
+          <li><code>heading1</code>: Major sections (matched using section-numbering regex, e.g., <code>1.0</code>, <code>2.0</code>).</li>
+          <li><code>heading2</code>: Subsections (e.g., <code>1.1</code>, <code>2.1.3</code>).</li>
+          <li><code>warning</code>: Highlighted cautionary details matching alert keywords (<code>WARNING</code>, <code>CAUTION</code>, <code>NOTE:</code>, <code>⚠</code>).</li>
+          <li><code>footnote</code>: Metadata or references located at the page foot with small font sizes.</li>
+          <li><code>table-header</code> &amp; <code>table-row</code>: Structured blocks containing column delimiters (<code>|</code>) or uniform spatial tabulations.</li>
+          <li><code>spec</code>: Technical datasheet spec line fallback.</li>
+        </ul>
+
+        <h2>4. Tree Hierarchy Reconstruction</h2>
+        <p>A stack-based assembler iterates over the ordered classified blocks to construct a nested parent-child document tree. Headings act as parent blocks, structural annotations parent their adjacent content blocks, and tables/warnings partition logically. The resulting hierarchy tree is outputted as a standard JSON outline, which can be downloaded directly from the <strong>JSON</strong> tab in the sidebar.</p>
+
+        <h2>5. Interface Controls</h2>
+        <ul>
+          <li><strong>Upload PDF:</strong> Parse layouts from any client-uploaded datasheet dynamically.</li>
+          <li><strong>Load Sample:</strong> Render the built-in blueprint sample document to test structural features.</li>
+          <li><strong>Naive vs. XY-Cut Toggles:</strong> Compare how standard linear streams stack up against structured layout partitions.</li>
+          <li><strong>Legend Badges:</strong> Check/uncheck categories to filter out specific bounding box overlays on the page viewer canvas.</li>
+          <li><strong>Bidirectional Highlighting:</strong> Hover/click elements in the page viewer, hierarchy tree, or reading order list to highlight sync highlights across panels.</li>
+        </ul>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -686,6 +891,28 @@
       document.querySelector('.tabpane[data-tab="'+tab.dataset.tab+'"]').classList.add('active');
     });
   });
+
+  // Documentation Modal events
+  const openDocsBtn = document.getElementById('open-docs');
+  const closeDocsBtn = document.getElementById('close-docs');
+  const docsModal = document.getElementById('docs-modal');
+
+  if (openDocsBtn && closeDocsBtn && docsModal) {
+    openDocsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      docsModal.classList.add('open');
+    });
+
+    closeDocsBtn.addEventListener('click', () => {
+      docsModal.classList.remove('open');
+    });
+
+    docsModal.addEventListener('click', (e) => {
+      if (e.target === docsModal) {
+        docsModal.classList.remove('open');
+      }
+    });
+  }
 
   document.getElementById('btnXYCut').addEventListener('click',()=>{ useXY=true; document.getElementById('btnXYCut').classList.add('active'); document.getElementById('btnNaive').classList.remove('active'); renderRaw(); drawAll(); });
   document.getElementById('btnNaive').addEventListener('click',()=>{ useXY=false; document.getElementById('btnNaive').classList.add('active'); document.getElementById('btnXYCut').classList.remove('active'); renderRaw(); drawAll(); });

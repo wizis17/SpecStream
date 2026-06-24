@@ -29,9 +29,11 @@ class SpecStreamRequestHandler(http.server.BaseHTTPRequestHandler):
         # Serve frontend and files
         path = self.path
         if path == '/' or path == '/index.html' or path == '/specstream-demo.html':
-            self.serve_file('specstream-demo.html', 'text/html')
+            self.serve_file('index.html', 'text/html')
         elif path == '/test.pdf':
             self.serve_file('test.pdf', 'application/pdf')
+        elif path == '/frontend/public/Mint.jpg' or path == '/Mint.jpg':
+            self.serve_file('frontend/public/Mint.jpg', 'image/jpeg')
         else:
             self.send_error(404, "File not found")
 
