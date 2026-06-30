@@ -3,205 +3,825 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SpecStream — Blueprint &amp; Spec Sheet Segmenter</title>
-  <meta name="description" content="SpecStream: Layout-aware technical datasheet parser with XY-cut reading order and hierarchy tree.">
-
-  <!-- Favicon -->
+  <title>SpecStream — Blueprint & Spec Sheet Segmenter</title>
+  <meta name="description" content="Layout-aware PDF and Excel parser with XY-cut reading order, semantic classification, and JSON hierarchy export.">
   <link rel="icon" type="image/jpeg" href="/Mint.jpg">
-
-  <!-- IBM Plex fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0c1a26;
+  --bg2:       #10222f;
+  --bg3:       #13283a;
+  --cyan:      #4fb8c9;
+  --cyan-dim:  #2c4f59;
+  --text:      #e9f2f4;
+  --dim:       #7f97a3;
+  --amber:     #d99a4e;
+  --green:     #4caf87;
+  --red:       #c1442d;
+  --purple:    #7d6ba8;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
 
-  <!-- PDF.js from CDN (v2 — stable) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ── NAV ───────────────────────────────────────────────── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 40px;
+  border-bottom: 1px solid var(--cyan-dim);
+  background: rgba(12,26,38,.85);
+  backdrop-filter: blur(12px);
+}
+
+.nav-logo {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: .05em;
+  color: var(--text);
+}
+.nav-logo span { color: var(--cyan); }
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-links a {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  color: var(--dim);
+  transition: color .15s;
+}
+.nav-links a:hover { color: var(--cyan); }
+
+.btn-nav {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  background: var(--cyan);
+  color: #000000;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+  text-decoration: none;
+  display: inline-block;
+}
+.btn-nav:hover { background: #6dcfdf; transform: translateY(-1px); }
+
+/* ── HERO ──────────────────────────────────────────────── */
+.hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  padding: 90px 80px 80px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; padding: 60px 28px; gap: 40px; }
+}
+
+.hero-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--cyan);
+  border: 1px solid var(--cyan-dim);
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 2px;
+  margin-bottom: 22px;
+  background: rgba(79,184,201,.06);
+}
+
+.hero h1 {
+  font-family: var(--sans);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 600;
+  line-height: 1.18;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 20px;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+.hero-desc {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--dim);
+  max-width: 480px;
+  margin-bottom: 36px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  background: var(--cyan);
+  color: #06161e;
+  border: none;
+  padding: 13px 28px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .15s, transform .1s, box-shadow .15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover {
+  background: #6dcfdf;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(79,184,201,.25);
+}
+
+.btn-ghost {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--dim);
+  border: 1px solid var(--cyan-dim);
+  background: transparent;
+  padding: 12px 24px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── TERMINAL / JSON PREVIEW ──────────────────────────── */
+.hero-visual {
+  position: relative;
+}
+
+.terminal {
+  background: #06121c;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(79,184,201,.1);
+}
+
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cyan-dim);
+  background: var(--bg3);
+}
+.term-dot { width: 10px; height: 10px; border-radius: 50%; }
+.term-dot.r { background: #c1442d; }
+.term-dot.y { background: #d99a4e; }
+.term-dot.g { background: #4caf87; }
+.term-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  margin-left: 8px;
+  letter-spacing: .06em;
+}
+
+.term-body {
+  padding: 18px 20px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.65;
+  overflow: hidden;
+}
+
+.j-key   { color: #81c9d7; }
+.j-str   { color: #a8d9a8; }
+.j-num   { color: #d99a4e; }
+.j-type  { color: #c792ea; }
+.j-dim   { color: var(--dim); }
+.j-cyan  { color: var(--cyan); }
+
+.badge-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-left: 6px;
+}
+.badge-h  { background: rgba(193,68,45,.2);  color: #e87060; }
+.badge-t  { background: rgba(181,131,44,.2); color: #d99a4e; }
+.badge-f  { background: rgba(76,175,135,.2); color: #4caf87; }
+.badge-w  { background: rgba(193,68,45,.2);  color: #e87060; }
+.badge-s  { background: rgba(125,107,168,.2);color: #a092c8; }
+
+/* floating accent labels */
+.hero-visual::before {
+  content: 'OUTPUT.JSON';
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .1em;
+  color: var(--cyan);
+  background: var(--bg);
+  padding: 2px 8px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 2px;
+}
+
+/* ── STATS ROW ─────────────────────────────────────────── */
+.stats {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--cyan-dim);
+  border-bottom: 1px solid var(--cyan-dim);
+  background: rgba(16,34,47,.6);
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.stat {
+  flex: 1;
+  padding: 28px 40px;
+  border-right: 1px solid var(--cyan-dim);
+  text-align: center;
+}
+.stat:last-child { border-right: none; }
+
+.stat-val {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: -.02em;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+@media (max-width: 700px) {
+  .stats { flex-wrap: wrap; }
+  .stat { flex: 1 1 50%; }
+}
+
+/* ── FEATURES ──────────────────────────────────────────── */
+.section {
+  padding: 80px 80px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) { .section { padding: 60px 28px; } }
+
+.section-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--cyan);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.section-title {
+  font-family: var(--sans);
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 14px;
+  letter-spacing: -.01em;
+}
+
+.section-sub {
+  font-size: 15px;
+  color: var(--dim);
+  line-height: 1.7;
+  max-width: 560px;
+  margin-bottom: 48px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) { .features-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 580px) { .features-grid { grid-template-columns: 1fr; } }
+
+.feat-card {
+  background: var(--bg2);
+  border: 1px solid var(--cyan-dim);
+  border-radius: 6px;
+  padding: 24px 22px;
+  transition: border-color .18s, transform .18s;
+  cursor: default;
+}
+
+.feat-card:hover {
+  border-color: var(--cyan);
+  transform: translateY(-3px);
+}
+
+.feat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.feat-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.feat-desc {
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.65;
+}
+
+/* ── HOW IT WORKS ──────────────────────────────────────── */
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+@media (max-width: 700px) { .how-grid { grid-template-columns: 1fr; } }
+
+.how-step {
+  padding: 36px 30px;
+  border-right: 1px solid var(--cyan-dim);
+  background: var(--bg2);
+  position: relative;
+}
+.how-step:last-child { border-right: none; }
+
+.how-num {
+  font-family: var(--mono);
+  font-size: 42px;
+  font-weight: 700;
+  color: rgba(79,184,201,.15);
+  line-height: 1;
+  margin-bottom: 16px;
+  letter-spacing: -.04em;
+}
+
+.how-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  color: var(--cyan);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.how-desc {
+  font-size: 13.5px;
+  color: var(--dim);
+  line-height: 1.65;
+}
+
+.how-arrow {
+  position: absolute;
+  right: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  background: var(--bg);
+  border: 1px solid var(--cyan-dim);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--cyan);
+  z-index: 1;
+}
+
+@media (max-width: 700px) {
+  .how-step { border-right: none; border-bottom: 1px solid var(--cyan-dim); }
+  .how-step:last-child { border-bottom: none; }
+  .how-arrow { display: none; }
+}
+
+/* ── TYPES SHOWCASE ────────────────────────────────────── */
+.types-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 32px;
+}
+
+.type-block {
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-family: var(--mono);
+  border-width: 1.5px;
+  border-style: solid;
+  flex: 1;
+  min-width: 120px;
+}
+
+.type-block .tb-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.type-block .tb-sample {
+  font-size: 11px;
+  opacity: .7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.t-heading  { border-color:#ef4444; background:rgba(239,68,68,.08);  color:#f87171; }
+.t-warning  { border-color:#f59e0b; background:rgba(245,158,11,.08); color:#fbbf24; }
+.t-footnote { border-color:#10b981; background:rgba(16,185,129,.08); color:#34d399; }
+.t-table    { border-color:#3b82f6; background:rgba(59,130,246,.08); color:#60a5fa; }
+.t-spec     { border-color:#8b5cf6; background:rgba(139,92,246,.08); color:#a78bfa; }
+
+/* ── CTA BANNER ────────────────────────────────────────── */
+.cta-banner {
+  margin: 0 80px 80px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(79,184,201,.08), rgba(79,184,201,.03));
+  padding: 56px 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  flex-wrap: wrap;
+  max-width: calc(1280px - 160px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cta-text h2 {
+  font-family: var(--sans);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.cta-text p { font-size: 14px; color: var(--dim); }
+
+@media (max-width: 700px) {
+  .cta-banner { margin: 0 20px 60px; padding: 36px 28px; }
+  .cta-text h2 { font-size: 22px; }
+}
+
+/* ── FOOTER ────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--cyan-dim);
+  padding: 24px 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: rgba(12,26,38,.6);
+}
+
+.footer-logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  color: var(--text);
+}
+.footer-logo span { color: var(--cyan); }
+
+.footer-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: .04em;
+}
+
+/* ── DIVIDER ───────────────────────────────────────────── */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--cyan-dim);
+  margin: 0 80px;
+  opacity: .4;
+}
+
+@media (max-width: 900px) { .section-divider { margin: 0 28px; } }
+
+/* ── SCROLL FADE IN ────────────────────────────────────── */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: none;
+}
+</style>
 </head>
 <body>
 
-  <!-- ═══ TITLE BLOCK ═══ -->
-  <div class="titleblock">
-    <div>
-      <div class="mark">SPEC<span>STREAM</span></div>
-      <div class="sub">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER</div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 20px;">
-      <a href="#" id="open-docs" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1;">DOCUMENTATION</a>
-      <a href="https://github.com/wizis17/SpecStream" target="_blank" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1; display: flex; align-items: center; gap: 6px;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;">
-          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-        </svg>GITHUB
+<!-- ══ NAV ══════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-logo">SPEC<span>STREAM</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="https://github.com/wizis17/SpecStream" target="_blank">GitHub</a>
+    <a class="btn-nav" href="./app.html">Get Started →</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ═════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-tag">OPEN SOURCE · MIT LICENSE · v1.0</div>
+    <h1>Parse Technical Documents with <em>Spatial Intelligence</em></h1>
+    <p class="hero-desc">
+      SpecStream applies recursive XY-cut partitioning to restore correct reading order in multi-column PDFs, then semantically classifies and hierarchically assembles every block — and converts Excel & CSV files too.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="./app.html">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Get Started
       </a>
-      <img src="/Mint.jpg" alt="PFP" style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-cyan); object-fit: cover; display: block;">
-      <div class="meta">
-        MODE: <b id="mode-label">READY</b><br>
-        SHEET: <b id="page-indicator">— / —</b> &nbsp; SCALE: 1:1
-      </div>
+      <a class="btn-ghost" href="https://github.com/wizis17/SpecStream" target="_blank">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        View on GitHub
+      </a>
     </div>
   </div>
 
-  <!-- ═══ TOOLBAR ═══ -->
-  <div class="toolbar">
-    <div class="file-upload-wrapper">
-      <button class="btn" id="upload-label">Upload PDF</button>
-      <input type="file" id="pdf-upload" accept=".pdf">
-    </div>
-
-    <button id="use-test-pdf" class="btn">Load sample datasheet</button>
-
-    <span class="filechip" id="file-chip"></span>
-
-    <div class="divider"></div>
-
-    <div class="seg">
-      <button class="btn" id="btn-naive">Naive scan order</button>
-      <button class="btn active" id="btn-xycut">XY-cut order</button>
-    </div>
-
-    <div class="divider"></div>
-
-    <button id="process-btn" class="btn active">Process Layout</button>
-  </div>
-
-  <!-- ═══ LEGEND ═══ -->
-  <div class="legend" id="legend"></div>
-
-  <!-- ═══ WORKSPACE ═══ -->
-  <div class="workspace">
-
-    <!-- Left: PDF Viewer Panel -->
-    <div class="panel">
-      <div class="panel-head">
-        <span>PAGE VIEWER — INTERACTIVE SOURCE HIGHLIGHTS</span>
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div class="page-nav" id="page-nav" style="display:none;">
-            <button id="prev-page" class="btn">◀ Prev</button>
-            <span class="page-indicator" id="page-nav-label">—</span>
-            <button id="next-page" class="btn">Next ▶</button>
-          </div>
-          <span class="count" id="block-count">— blocks</span>
-        </div>
+  <div class="hero-visual">
+    <div class="terminal">
+      <div class="term-bar">
+        <div class="term-dot r"></div>
+        <div class="term-dot y"></div>
+        <div class="term-dot g"></div>
+        <span class="term-title">specstream-output.json</span>
       </div>
-
-      <!-- Stage: canvas + overlay wrapper -->
-      <div class="stage" id="stage">
-        <!-- Empty state -->
-        <div class="stage-empty" id="stage-empty">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <p>Upload a PDF or load the sample datasheet to begin.</p>
-        </div>
-
-        <!-- PDF canvas (hidden until loaded) -->
-        <div id="canvas-wrapper" style="position:relative; display:none;">
-          <canvas id="pdf-canvas"></canvas>
-          <div class="overlay-layer" id="overlay-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
-        </div>
-      </div>
-
-      <!-- Detail / Inspector strip -->
-      <div class="detail" id="detail-box">
-        <span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>
-      </div>
-    </div>
-
-    <!-- Right: Outline / Tree Panel -->
-    <div class="panel">
-      <div class="tabs">
-        <div class="tab active" data-tab="tree">Hierarchy</div>
-        <div class="tab" data-tab="raw">Reading order</div>
-        <div class="tab" data-tab="json">JSON</div>
-      </div>
-
-      <div class="tabpane active" data-tab="tree">
-        <div class="tree" id="tree-out">
-          <div style="padding:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); font-style:italic; opacity:.6;">
-            Outline will appear after processing.
-          </div>
-        </div>
-      </div>
-
-      <div class="tabpane" data-tab="raw">
-        <div class="rawlist" id="raw-out"></div>
-      </div>
-
-      <div class="tabpane" data-tab="json">
-        <div class="jsonbar">
-          <button class="btn" id="btn-copy-json">Download JSON</button>
-        </div>
-        <pre id="json-out"></pre>
-      </div>
-    </div>
-
-  </div><!-- /workspace -->
-
-  <!-- ═══ STATUS BAR ═══ -->
-  <div class="statusbar">
-    <span>BLOCKS: <b id="st-blocks">—</b></span>
-    <span>PAGES: <b id="st-pages">—</b></span>
-    <span>TIME: <b id="st-time">—</b></span>
-    <span>SELECTED: <b id="st-sel">—</b></span>
-    <span>STATUS: <b id="st-status">Ready</b></span>
-  </div>
-
-  <!-- ═══ FOOTER ═══ -->
-  <div class="footer-note">
-    <b>How to use —</b> upload a PDF or load the sample datasheet, then click "Process Layout" to run the XY-cut layout parser. Toggle between XY-cut and Naive scan order to compare reading sequences. Click any bounding box or tree node to inspect its type and position.
-  </div>
-
-  <!-- ═══ DOCUMENTATION MODAL ═══ -->
-  <div class="modal-overlay" id="docs-modal">
-    <div class="modal-container">
-      <div class="modal-header">
-        <span class="modal-title">SPECSTREAM // SYSTEM_MANUAL.md</span>
-        <button class="modal-close" id="close-docs">&times;</button>
-      </div>
-      <div class="modal-body">
-        <h1>📐 SpecStream Technical System Manual</h1>
-        <p>SpecStream is a layout-aware PDF document parser designed specifically for technical datasheets, blueprints, and engineering spec sheets.</p>
-        
-        <h2>1. The Problem Statement</h2>
-        <p>Standard PDF text extraction reads character streams in raw flow order. When encountering multi-column text blocks or sidebar specs, the stream bleeds left-to-right across columns, resulting in interleaved text that completely destroys the logical reading sequence. Standard extractors also strip all semantic layout hierarchies, converting headings, tables, footnotes, and warnings into flat, undifferentiated lines.</p>
-        
-        <h2>2. Dynamic XY-Cut Partitioning Algorithm</h2>
-        <p>SpecStream resolves multi-column bleeding by executing a recursive spatial division algorithm based on projection profiles:</p>
-        <ul>
-          <li><strong>Horizontal Projection Profiles:</strong> The engine merges all bounding box <code>y-intervals</code> across the page to find continuous horizontal whitespace gaps larger than the gap threshold (<code>H_GAP</code>). If found, the page is divided into top and bottom bands, and the parser recurses on each band.</li>
-          <li><strong>Vertical Projection Profiles:</strong> If no horizontal cut is possible, the engine merges the <code>x-intervals</code> to find vertical whitespace columns larger than the gap threshold (<code>V_GAP</code>). If found, it partitions the space into left and right columns and recurses.</li>
-          <li><strong>Fallback:</strong> When no cuts can be made, a leaf node is established. The remaining blocks within that leaf are ordered by top-to-bottom and left-to-right positioning.</li>
-          <li><strong>Dynamic Gap Sizing:</strong> Rather than hardcoding fixed pixel gaps, SpecStream dynamically computes threshold gaps by analyzing the median line height of text components within the document.</li>
-        </ul>
-        
-        <h2>3. Heuristic Semantic Classification</h2>
-        <p>Once a sequence of blocks is ordered, each block is analyzed and tagged with a semantic block category:</p>
-        <ul>
-          <li><code>title</code>: Main document title (typically large font size 18px+).</li>
-          <li><code>subtitle</code>: Auxiliary titles directly below headers.</li>
-          <li><code>heading1</code>: Major sections (matched using section-numbering regex, e.g., <code>1.0</code>, <code>2.0</code>).</li>
-          <li><code>heading2</code>: Subsections (e.g., <code>1.1</code>, <code>2.1.3</code>).</li>
-          <li><code>warning</code>: Highlighted cautionary details matching alert keywords (<code>WARNING</code>, <code>CAUTION</code>, <code>NOTE:</code>, <code>⚠</code>).</li>
-          <li><code>footnote</code>: Metadata or references located at the page foot with small font sizes.</li>
-          <li><code>table-header</code> &amp; <code>table-row</code>: Structured blocks containing column delimiters (<code>|</code>) or uniform spatial tabulations.</li>
-          <li><code>spec</code>: Technical datasheet spec line fallback.</li>
-        </ul>
-
-        <h2>2. Tree Hierarchy Reconstruction</h2>
-        <p>A stack-based assembler iterates over the ordered classified blocks to construct a nested parent-child document tree. Headings act as parent blocks, structural annotations parent their adjacent content blocks, and tables/warnings partition logically. The resulting hierarchy tree is outputted as a standard JSON outline, which can be downloaded directly from the <strong>JSON</strong> tab in the sidebar.</p>
-
-        <h2>5. Interface Controls</h2>
-        <ul>
-          <li><strong>Upload PDF:</strong> Parse layouts from any client-uploaded datasheet dynamically.</li>
-          <li><strong>Load Sample:</strong> Render the built-in blueprint sample document to test structural features.</li>
-          <li><strong>Naive vs. XY-Cut Toggles:</strong> Compare how standard linear streams stack up against structured layout partitions.</li>
-          <li><strong>Legend Badges:</strong> Check/uncheck categories to filter out specific bounding box overlays on the page viewer canvas.</li>
-          <li><strong>Bidirectional Highlighting:</strong> Hover/click elements in the page viewer, hierarchy tree, or reading order list to highlight sync highlights across panels.</li>
-        </ul>
+      <div class="term-body">
+<pre><span class="j-dim">{</span>
+  <span class="j-key">"type"</span><span class="j-dim">:</span> <span class="j-str">"document"</span><span class="j-dim">,</span>
+  <span class="j-key">"children"</span><span class="j-dim">: [</span>
+    <span class="j-dim">{</span>
+      <span class="j-key">"type"</span><span class="j-dim">:</span> <span class="j-type">"heading1"</span><span class="badge-pill badge-h">heading</span>
+      <span class="j-key">"label"</span><span class="j-dim">:</span> <span class="j-str">"1. Electrical Characteristics"</span><span class="j-dim">,</span>
+      <span class="j-key">"bbox"</span><span class="j-dim">: {</span> <span class="j-key">"page"</span><span class="j-dim">:</span> <span class="j-num">0</span><span class="j-dim">,</span> <span class="j-key">"x"</span><span class="j-dim">:</span> <span class="j-num">40</span><span class="j-dim">,</span> <span class="j-key">"y"</span><span class="j-dim">:</span> <span class="j-num">110</span> <span class="j-dim">},</span>
+      <span class="j-key">"children"</span><span class="j-dim">: [</span>
+        <span class="j-dim">{</span>
+          <span class="j-key">"type"</span><span class="j-dim">:</span> <span class="j-type">"table-row"</span><span class="badge-pill badge-t">table</span>
+          <span class="j-key">"label"</span><span class="j-dim">:</span> <span class="j-str">"Vdd | -0.3 | 4.0 | V"</span>
+        <span class="j-dim">},</span>
+        <span class="j-dim">{</span>
+          <span class="j-key">"type"</span><span class="j-dim">:</span> <span class="j-type">"warning"</span><span class="badge-pill badge-w">warning</span>
+          <span class="j-key">"label"</span><span class="j-dim">:</span> <span class="j-str">"⚠ CAUTION: Do not exceed..."</span>
+        <span class="j-dim">},</span>
+        <span class="j-dim">{</span>
+          <span class="j-key">"type"</span><span class="j-dim">:</span> <span class="j-type">"footnote"</span><span class="badge-pill badge-f">footnote</span>
+          <span class="j-key">"label"</span><span class="j-dim">:</span> <span class="j-str">"¹ See Section 1.2 for derating..."</span>
+        <span class="j-dim">}</span>
+      <span class="j-dim">]</span>
+    <span class="j-dim">}</span>
+  <span class="j-dim">]</span>
+<span class="j-dim">}</span></pre>
       </div>
     </div>
   </div>
+</section>
 
-  <!-- App Entry Point -->
-  <script type="module" src="/src/main.js"></script>
+<!-- ══ STATS ═════════════════════════════════════════════ -->
+<div class="stats">
+  <div class="stat fade-in">
+    <div class="stat-val">5</div>
+    <div class="stat-label">Block Types</div>
+  </div>
+  <div class="stat fade-in">
+    <div class="stat-val">XY-Cut</div>
+    <div class="stat-label">Algorithm</div>
+  </div>
+  <div class="stat fade-in">
+    <div class="stat-val">100%</div>
+    <div class="stat-label">Client-Side</div>
+  </div>
+  <div class="stat fade-in">
+    <div class="stat-val">JSON</div>
+    <div class="stat-label">Structured Output</div>
+  </div>
+</div>
+
+<!-- ══ FEATURES ══════════════════════════════════════════ -->
+<section class="section" id="features">
+  <div class="section-tag fade-in">// CAPABILITIES</div>
+  <h2 class="section-title fade-in">Everything you need to parse technical documents</h2>
+  <p class="section-sub fade-in">From multi-column blueprints to Excel datasheets — SpecStream extracts, orders, classifies, and exports structured data.</p>
+
+  <div class="features-grid">
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(79,184,201,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4fb8c9" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </div>
+      <div class="feat-title">XY-Cut Partitioning</div>
+      <div class="feat-desc">Recursive spatial division using projection profiles. Horizontal then vertical whitespace gaps are detected to split pages into logically-ordered reading zones.</div>
+    </div>
+
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(217,154,78,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d99a4e" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <div class="feat-title">Semantic Classification</div>
+      <div class="feat-desc">Each block is tagged as heading, warning, footnote, table, or spec using font-size heuristics and pattern matching — no ML required.</div>
+    </div>
+
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(76,175,135,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4caf87" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </div>
+      <div class="feat-title">Tree Hierarchy</div>
+      <div class="feat-desc">A stack-based assembler reconstructs the document's logical parent-child structure from the ordered block sequence. Headings parent their subsequent content.</div>
+    </div>
+
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(59,130,246,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      <div class="feat-title">Excel & CSV Support</div>
+      <div class="feat-desc">Upload .xlsx, .xls, .csv, or .tsv files. SheetJS parses them entirely in the browser with multi-sheet navigation, row inspection, and JSON export.</div>
+    </div>
+
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(139,92,246,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <div class="feat-title">Interactive Inspector</div>
+      <div class="feat-desc">Click any bounding box or tree node for bidirectional highlighting across the canvas, hierarchy tree, and reading-order list simultaneously.</div>
+    </div>
+
+    <div class="feat-card fade-in">
+      <div class="feat-icon" style="background:rgba(193,68,45,.1);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e87060" stroke-width="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <div class="feat-title">JSON Export</div>
+      <div class="feat-desc">Download the complete hierarchy as structured JSON with block type, label, bounding box coordinates, and page number — ready for LLM pipelines or downstream tooling.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ══ BLOCK TYPES ═══════════════════════════════════════ -->
+<section class="section">
+  <div class="section-tag fade-in">// BLOCK TYPES</div>
+  <h2 class="section-title fade-in">Five semantic categories</h2>
+  <p class="section-sub fade-in">Every extracted text span is classified into one of five semantic types, each with its own colour coding across the canvas overlay, tree badges, and JSON output.</p>
+
+  <div class="types-row fade-in">
+    <div class="type-block t-heading">
+      <div class="tb-label">Heading</div>
+      <div class="tb-sample">1. Electrical Characteristics</div>
+    </div>
+    <div class="type-block t-warning">
+      <div class="tb-label">Warning</div>
+      <div class="tb-sample">⚠ CAUTION: Do not exceed...</div>
+    </div>
+    <div class="type-block t-footnote">
+      <div class="tb-label">Footnote</div>
+      <div class="tb-sample">¹ See Section 1.2 for curves</div>
+    </div>
+    <div class="type-block t-table">
+      <div class="tb-label">Table</div>
+      <div class="tb-sample">Vdd | -0.3 | 4.0 | V</div>
+    </div>
+    <div class="type-block t-spec">
+      <div class="tb-label">Spec</div>
+      <div class="tb-sample">Operating Voltage 1.8V–3.6V</div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ══ HOW IT WORKS ══════════════════════════════════════ -->
+<section class="section" id="how">
+  <div class="section-tag fade-in">// WORKFLOW</div>
+  <h2 class="section-title fade-in">Three steps from file to structured data</h2>
+  <p class="section-sub fade-in">The full pipeline runs in seconds — upload, process, export.</p>
+
+  <div class="how-grid fade-in">
+    <div class="how-step">
+      <div class="how-num">01</div>
+      <div class="how-title">Upload</div>
+      <div class="how-desc">Drop a PDF datasheet or upload an Excel / CSV file. Multi-page PDFs and multi-sheet workbooks are both supported.</div>
+      <div class="how-arrow">→</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">02</div>
+      <div class="how-title">Process</div>
+      <div class="how-desc">Click <b style="color:var(--cyan)">Process Layout</b>. The XY-cut engine partitions the page, classifies each block, and assembles the hierarchy tree.</div>
+      <div class="how-arrow">→</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">03</div>
+      <div class="how-title">Export</div>
+      <div class="how-desc">Inspect blocks interactively on the canvas or tree, then download the full JSON hierarchy — ready for LLMs, databases, or further processing.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CTA ════════════════════════════════════════════════ -->
+<div class="cta-banner fade-in">
+  <div class="cta-text">
+    <h2>Ready to parse your first document?</h2>
+    <p>No install needed — runs entirely in your browser. PDF and Excel both supported.</p>
+  </div>
+  <a class="btn-primary" href="./app.html" style="font-size:13px; padding:15px 32px;">
+    Open SpecStream →
+  </a>
+</div>
+
+<!-- ══ FOOTER ════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-logo">SPEC<span>STREAM</span></div>
+  <div class="footer-note">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER · MIT LICENSE</div>
+  <a href="https://github.com/wizis17/SpecStream" target="_blank" style="color:var(--dim); font-family:var(--mono); font-size:10px; letter-spacing:.04em; transition:color .15s;" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--dim)'">GITHUB ↗</a>
+</footer>
+
+<script>
+// Scroll-triggered fade-in
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+</script>
 </body>
 </html>

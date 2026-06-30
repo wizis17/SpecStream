@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpecStream — Blueprint &amp; Spec Sheet Segmenter</title>
+  <meta name="description" content="SpecStream: Layout-aware technical datasheet parser with XY-cut reading order and hierarchy tree.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="/Mint.jpg">
+
+  <!-- IBM Plex fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- PDF.js from CDN (v2 — stable) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <!-- SheetJS for Excel/CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+    onerror="console.warn('SheetJS failed to load — Excel/CSV upload unavailable.');"></script>
+</head>
+<body>
+
+  <!-- ═══ TITLE BLOCK ═══ -->
+  <div class="titleblock">
+    <div>
+      <div class="mark">SPEC<span>STREAM</span></div>
+      <div class="sub">BLUEPRINT &amp; TECHNICAL SHEET SEGMENTER</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <a href="./index.html" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1;">← HOME</a>
+      <a href="#" id="open-docs" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1;">DOCUMENTATION</a>
+      <a href="https://github.com/wizis17/SpecStream" target="_blank" style="font-family: var(--font-mono); font-size: 11px; color: var(--line-cyan); text-decoration: none; border-bottom: 1px dashed var(--line-cyan); letter-spacing: 0.04em; padding-bottom: 2px; line-height: 1; display: flex; align-items: center; gap: 6px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle;">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>GITHUB
+      </a>
+      <img src="/Mint.jpg" alt="PFP" style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-cyan); object-fit: cover; display: block;">
+      <div class="meta">
+        MODE: <b id="mode-label">READY</b><br>
+        SHEET: <b id="page-indicator">— / —</b> &nbsp; SCALE: 1:1
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TOOLBAR ═══ -->
+  <div class="toolbar">
+    <div class="file-upload-wrapper">
+      <button class="btn" id="upload-label">Upload Files</button>
+      <input type="file" id="pdf-upload" accept=".pdf,.xlsx,.xls,.csv,.tsv,.md">
+    </div>
+
+    <button id="use-test-pdf" class="btn">Load sample datasheet</button>
+
+    <span class="filechip" id="file-chip"></span>
+
+    <div class="divider"></div>
+
+    <div class="seg">
+      <button class="btn" id="btn-naive">Naive scan order</button>
+      <button class="btn active" id="btn-xycut">XY-cut order</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <button id="process-btn" class="btn active">Process Layout</button>
+  </div>
+
+  <!-- ═══ LEGEND ═══ -->
+  <div class="legend" id="legend"></div>
+
+  <!-- ═══ WORKSPACE ═══ -->
+  <div class="workspace">
+
+    <!-- Left: PDF Viewer Panel -->
+    <div class="panel">
+      <div class="panel-head">
+        <span>PAGE VIEWER — INTERACTIVE SOURCE HIGHLIGHTS</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="page-nav" id="page-nav" style="display:none;">
+            <button id="prev-page" class="btn">◀ Prev</button>
+            <span class="page-indicator" id="page-nav-label">—</span>
+            <button id="next-page" class="btn">Next ▶</button>
+          </div>
+          <span class="count" id="block-count">— blocks</span>
+        </div>
+      </div>
+
+      <!-- Stage: canvas + overlay wrapper -->
+      <div class="stage" id="stage">
+        <!-- Empty state -->
+        <div class="stage-empty" id="stage-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <p>Upload a PDF or load the sample datasheet to begin.</p>
+        </div>
+
+        <!-- PDF canvas (hidden until loaded) -->
+        <div id="canvas-wrapper" style="position:relative; display:none;">
+          <canvas id="pdf-canvas"></canvas>
+          <div class="overlay-layer" id="overlay-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+        </div>
+
+        <!-- Spreadsheet viewer (hidden until Excel/CSV loaded) -->
+        <div id="spreadsheet-wrapper" style="display:none; flex-direction:column; width:100%; height:100%;">
+          <div id="sheet-tabs" class="sheet-tabs" style="display:none;"></div>
+          <div id="sheet-table-container" class="sheet-table-container"></div>
+        </div>
+      </div>
+
+      <!-- Detail / Inspector strip -->
+      <div class="detail" id="detail-box">
+        <span class="empty">Click a region on the page, or a node in the hierarchy tree, to inspect it.</span>
+      </div>
+    </div>
+
+    <!-- Right: Outline / Tree Panel -->
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" data-tab="tree">Hierarchy</div>
+        <div class="tab" data-tab="raw">Reading order</div>
+        <div class="tab" data-tab="json">JSON</div>
+        <div class="tab" data-tab="markdown">Markdown</div>
+      </div>
+
+      <div class="tabpane active" data-tab="tree">
+        <div class="tree" id="tree-out">
+          <div style="padding:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); font-style:italic; opacity:.6;">
+            Outline will appear after processing.
+          </div>
+        </div>
+      </div>
+
+      <div class="tabpane" data-tab="raw">
+        <div class="rawlist" id="raw-out"></div>
+      </div>
+
+      <div class="tabpane" data-tab="json">
+        <div class="jsonbar">
+          <button class="btn" id="btn-copy-json">Download JSON</button>
+        </div>
+        <pre id="json-out"></pre>
+      </div>
+
+      <div class="tabpane" data-tab="markdown">
+        <div class="jsonbar">
+          <button class="btn" id="btn-copy-md">Download MD</button>
+        </div>
+        <pre id="md-out"></pre>
+      </div>
+    </div>
+
+  </div><!-- /workspace -->
+
+  <!-- ═══ STATUS BAR ═══ -->
+  <div class="statusbar">
+    <span>BLOCKS: <b id="st-blocks">—</b></span>
+    <span>PAGES: <b id="st-pages">—</b></span>
+    <span>TIME: <b id="st-time">—</b></span>
+    <span>SELECTED: <b id="st-sel">—</b></span>
+    <span>STATUS: <b id="st-status">Ready</b></span>
+  </div>
+
+  <!-- ═══ FOOTER ═══ -->
+  <div class="footer-note">
+    <b>How to use —</b> upload a PDF, Excel, CSV, or Markdown file, then click "Process Layout" to run the XY-cut layout parser. Toggle between XY-cut and Naive scan order to compare reading sequences. Click any bounding box or tree node to inspect its type and position. Export results as JSON or Markdown from the right panel tabs.
+  </div>
+
+  <!-- ═══ DOCUMENTATION MODAL ═══ -->
+  <div class="modal-overlay" id="docs-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">SPECSTREAM // SYSTEM_MANUAL.md</span>
+        <button class="modal-close" id="close-docs">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h1>📐 SpecStream Technical System Manual</h1>
+        <p>SpecStream is a layout-aware PDF document parser designed specifically for technical datasheets, blueprints, and engineering spec sheets.</p>
+        
+        <h2>1. The Problem Statement</h2>
+        <p>Standard PDF text extraction reads character streams in raw flow order. When encountering multi-column text blocks or sidebar specs, the stream bleeds left-to-right across columns, resulting in interleaved text that completely destroys the logical reading sequence. Standard extractors also strip all semantic layout hierarchies, converting headings, tables, footnotes, and warnings into flat, undifferentiated lines.</p>
+        
+        <h2>2. Dynamic XY-Cut Partitioning Algorithm</h2>
+        <p>SpecStream resolves multi-column bleeding by executing a recursive spatial division algorithm based on projection profiles:</p>
+        <ul>
+          <li><strong>Horizontal Projection Profiles:</strong> The engine merges all bounding box <code>y-intervals</code> across the page to find continuous horizontal whitespace gaps larger than the gap threshold (<code>H_GAP</code>). If found, the page is divided into top and bottom bands, and the parser recurses on each band.</li>
+          <li><strong>Vertical Projection Profiles:</strong> If no horizontal cut is possible, the engine merges the <code>x-intervals</code> to find vertical whitespace columns larger than the gap threshold (<code>V_GAP</code>). If found, it partitions the space into left and right columns and recurses.</li>
+          <li><strong>Fallback:</strong> When no cuts can be made, a leaf node is established. The remaining blocks within that leaf are ordered by top-to-bottom and left-to-right positioning.</li>
+          <li><strong>Dynamic Gap Sizing:</strong> Rather than hardcoding fixed pixel gaps, SpecStream dynamically computes threshold gaps by analyzing the median line height of text components within the document.</li>
+        </ul>
+        
+        <h2>3. Heuristic Semantic Classification</h2>
+        <p>Once a sequence of blocks is ordered, each block is analyzed and tagged with a semantic block category:</p>
+        <ul>
+          <li><code>title</code>: Main document title (typically large font size 18px+).</li>
+          <li><code>subtitle</code>: Auxiliary titles directly below headers.</li>
+          <li><code>heading1</code>: Major sections (matched using section-numbering regex, e.g., <code>1.0</code>, <code>2.0</code>).</li>
+          <li><code>heading2</code>: Subsections (e.g., <code>1.1</code>, <code>2.1.3</code>).</li>
+          <li><code>warning</code>: Highlighted cautionary details matching alert keywords (<code>WARNING</code>, <code>CAUTION</code>, <code>NOTE:</code>, <code>⚠</code>).</li>
+          <li><code>footnote</code>: Metadata or references located at the page foot with small font sizes.</li>
+          <li><code>table-header</code> &amp; <code>table-row</code>: Structured blocks containing column delimiters (<code>|</code>) or uniform spatial tabulations.</li>
+          <li><code>spec</code>: Technical datasheet spec line fallback.</li>
+        </ul>
+
+        <h2>2. Tree Hierarchy Reconstruction</h2>
+        <p>A stack-based assembler iterates over the ordered classified blocks to construct a nested parent-child document tree. Headings act as parent blocks, structural annotations parent their adjacent content blocks, and tables/warnings partition logically. The resulting hierarchy tree is outputted as a standard JSON outline, which can be downloaded directly from the <strong>JSON</strong> tab in the sidebar.</p>
+
+        <h2>5. Interface Controls</h2>
+        <ul>
+          <li><strong>Upload Files:</strong> Parse layouts from any client-uploaded datasheet dynamically.</li>
+          <li><strong>Load Sample:</strong> Render the built-in blueprint sample document to test structural features.</li>
+          <li><strong>Naive vs. XY-Cut Toggles:</strong> Compare how standard linear streams stack up against structured layout partitions.</li>
+          <li><strong>Legend Badges:</strong> Check/uncheck categories to filter out specific bounding box overlays on the page viewer canvas.</li>
+          <li><strong>Bidirectional Highlighting:</strong> Hover/click elements in the page viewer, hierarchy tree, or reading order list to highlight sync highlights across panels.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Entry Point -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

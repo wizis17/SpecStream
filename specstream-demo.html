@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecStream — Blueprint & Spec Sheet Segmenter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window._pdfjsLoadError = false;
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+  onerror="window._pdfjsLoadError=true;console.warn('pdf.js failed to load — PDF upload will be unavailable.');"></script>
+<script>
+  if (!window._pdfjsLoadError && window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+  onerror="console.warn('SheetJS failed to load — Excel/CSV upload unavailable.');"></script>
+<style>
+:root {
+  --bg-main:            #0b0f19;
+  --bg-card:            #151f32;
+  --bg-input:           #1e293b;
+  --text-main:          #f8fafc;
+  --text-secondary:     #94a3b8;
+  --text-muted:         #64748b;
+  --border-color:       #1e293b;
+  --border-highlight:   #334155;
+  --accent-primary:     #6366f1;
+  --accent-hover:       #4f46e5;
+  --color-heading:      #ef4444;
+  --color-warning:      #f59e0b;
+  --color-footnote:     #10b981;
+  --color-table:        #3b82f6;
+  --color-spec:         #8b5cf6;
+  --bg-overlay-heading: rgba(239,68,68,0.15);
+  --bg-overlay-warning: rgba(245,158,11,0.15);
+  --bg-overlay-footnote:rgba(16,185,129,0.15);
+  --bg-overlay-table:   rgba(59,130,246,0.15);
+  --bg-overlay-spec:    rgba(139,92,246,0.15);
+  --font-main:          'Outfit', sans-serif;
+  --font-mono:          'JetBrains Mono', monospace;
+  --shadow-sm:  0 1px 2px 0 rgba(0,0,0,0.05);
+  --shadow-md:  0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+  --shadow-lg:  0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+}
+
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  background-color:var(--bg-main);
+  color:var(--text-main);
+  font-family:var(--font-main);
+  font-size:1rem;
+  font-weight:400;
+  -webkit-font-smoothing:antialiased;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+}
+
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:#0b0f19;}
+::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:#334155;}
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.header{
+  background-color:var(--bg-card);
+  border-bottom:1px solid var(--border-color);
+  padding:1.25rem 2rem;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:var(--shadow-sm);
+  flex:none;
+}
+.logo-wordmark{
+  font-size:1.5rem;
+  font-weight:700;
+  letter-spacing:-0.025em;
+  background:linear-gradient(135deg,#a5b4fc 0%,#6366f1 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1;
+}
+.logo-tagline{
+  font-size:0.8125rem;
+  color:var(--text-muted);
+  margin-top:0.25rem;
+}
+.header-controls{
+  display:flex;
+  align-items:center;
+  gap:0.625rem;
+}
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn{
+  font-family:var(--font-main);
+  font-size:0.875rem;
+  font-weight:500;
+  border-radius:0.5rem;
+  padding:0.625rem 1.25rem;
+  border:1px solid transparent;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:0.5rem;
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+  text-decoration:none;
+  white-space:nowrap;
+}
+.btn-primary{background-color:var(--accent-primary);color:white;}
+.btn-primary:hover{background-color:var(--accent-hover);transform:translateY(-1px);}
+.btn-secondary{background-color:var(--bg-input);color:var(--text-secondary);}
+.btn-secondary:hover{background-color:var(--border-highlight);color:var(--text-main);transform:translateY(-1px);}
+.btn-sm{padding:0.4rem 0.8rem;}
+.btn-xs{padding:0.25rem 0.75rem;font-size:0.75rem;}
+
+.nav-link{
+  font-family:var(--font-main);
+  font-size:0.875rem;
+  font-weight:500;
+  color:var(--text-secondary);
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:0.375rem;
+  transition:color 0.15s;
+  padding:0.25rem;
+}
+.nav-link:hover{color:var(--text-main);}
+
+select.mode-select{
+  font-family:var(--font-main);
+  font-size:0.875rem;
+  color:var(--text-main);
+  background-color:var(--bg-input);
+  border:1px solid var(--border-highlight);
+  border-radius:0.5rem;
+  padding:0.625rem 2rem 0.625rem 1rem;
+  appearance:none;
+  cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 0.75rem center;
+  transition:border-color 0.2s,box-shadow 0.2s;
+}
+select.mode-select:focus{outline:none;border-color:var(--accent-primary);box-shadow:0 0 0 2px rgba(99,102,241,0.2);}
+
+input[type="file"]{display:none;}
+
+/* ── STATUS BAR ─────────────────────────────────────────── */
+.status-bar{
+  background-color:#0f172a;
+  border-bottom:1px solid var(--border-color);
+  height:48px;
+  padding:0 2rem;
+  display:flex;
+  align-items:center;
+  gap:0.75rem;
+  flex:none;
+}
+.status-dot{
+  width:8px;height:8px;border-radius:50%;flex:none;
+  background-color:var(--text-muted);
+  transition:background-color 0.3s,box-shadow 0.3s;
+}
+.status-dot.success{background-color:#10b981;box-shadow:0 0 8px #10b981;}
+.status-dot.error{background-color:#ef4444;box-shadow:0 0 8px #ef4444;}
+.status-dot.info{background-color:#3b82f6;box-shadow:0 0 8px #3b82f6;}
+.status-text{font-size:0.8125rem;color:var(--text-secondary);}
+
+/* ── MAIN GRID ──────────────────────────────────────────── */
+.main-container{
+  display:grid;
+  grid-template-columns:1fr 450px;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+
+/* ── VIEWER PANEL ───────────────────────────────────────── */
+.viewer-panel{
+  padding:2rem;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  border-right:1px solid var(--border-color);
+}
+.viewer-controls-bar{
+  background-color:var(--bg-card);
+  border:1px solid var(--border-color);
+  border-radius:0.75rem;
+  padding:0.75rem 1.25rem;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  width:100%;
+  max-width:800px;
+  margin-bottom:1rem;
+  flex:none;
+}
+.page-navigation{display:flex;align-items:center;gap:0.75rem;}
+.page-indicator{font-size:0.875rem;font-weight:500;color:var(--text-secondary);}
+.meta-pills{display:flex;align-items:center;gap:0.5rem;}
+.pill{
+  font-family:var(--font-mono);
+  font-size:0.75rem;
+  color:var(--text-secondary);
+  background-color:var(--bg-input);
+  border:1px solid var(--border-highlight);
+  padding:0.25rem 0.625rem;
+  border-radius:2rem;
+}
+
+.pdf-viewport-container{
+  position:relative;
+  display:inline-block;
+  border-radius:0.75rem;
+  box-shadow:var(--shadow-lg);
+  overflow:hidden;
+}
+#pageCanvas{display:block;}
+.bbox-overlay-layer{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;
+}
+.bbox-overlay{
+  position:absolute;
+  border-radius:2px;
+  opacity:0.7;
+  transition:all 0.15s ease-in-out;
+  pointer-events:all;
+  cursor:pointer;
+}
+.bbox-overlay[data-type="heading"]{border:1.5px solid var(--color-heading);background-color:var(--bg-overlay-heading);color:var(--color-heading);}
+.bbox-overlay[data-type="warning"]{border:1.5px solid var(--color-warning);background-color:var(--bg-overlay-warning);color:var(--color-warning);}
+.bbox-overlay[data-type="footnote"]{border:1.5px solid var(--color-footnote);background-color:var(--bg-overlay-footnote);color:var(--color-footnote);}
+.bbox-overlay[data-type="table"]{border:1.5px solid var(--color-table);background-color:var(--bg-overlay-table);color:var(--color-table);}
+.bbox-overlay[data-type="spec"]{border:1.5px solid var(--color-spec);background-color:var(--bg-overlay-spec);color:var(--color-spec);}
+.bbox-overlay:hover,.bbox-overlay.bbox-hover{opacity:1;z-index:10;border-width:2.5px;box-shadow:0 0 10px currentColor;}
+.bbox-overlay.bbox-selected{opacity:1;z-index:20;border-width:3px;box-shadow:0 0 15px currentColor;}
+
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;min-height:400px;
+}
+.empty-state-icon{font-size:3rem;opacity:0.5;margin-bottom:1rem;}
+.empty-state h3{color:var(--text-secondary);margin-bottom:0.5rem;font-weight:500;}
+.empty-state p{color:var(--text-muted);font-size:0.875rem;}
+
+/* ── SIDEBAR ────────────────────────────────────────────── */
+.sidebar-panel{
+  background-color:var(--bg-card);
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  overflow:hidden;
+}
+.sidebar-header{padding:1.5rem;border-bottom:1px solid var(--border-color);}
+.sidebar-title{font-size:1.125rem;font-weight:600;color:var(--text-main);margin-bottom:0.25rem;}
+.sidebar-meta{font-size:0.8125rem;color:var(--text-muted);}
+
+.tree-container{padding:1.5rem;overflow-y:auto;font-size:0.875rem;}
+.tree-item{margin:1px 0;}
+.tree-item-header{
+  display:flex;align-items:center;gap:0.5rem;
+  padding:0.375rem 0.5rem;border-radius:0.375rem;
+  cursor:pointer;border:1px solid transparent;
+  transition:all 0.15s;color:var(--text-secondary);
+}
+.tree-item-header:hover{background-color:var(--bg-input);}
+.tree-selected>.tree-item-header{
+  background-color:rgba(99,102,241,0.15);
+  border-color:rgba(99,102,241,0.3);
+  color:white;font-weight:500;
+}
+.tree-toggle{font-size:0.65rem;color:var(--text-muted);width:14px;flex:none;user-select:none;}
+.tree-bullet{font-size:0.8rem;color:var(--text-muted);width:14px;flex:none;}
+.tree-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tree-badge{
+  font-family:var(--font-mono);font-size:0.65rem;font-weight:700;
+  letter-spacing:0.05em;padding:0.125rem 0.375rem;border-radius:0.25rem;flex:none;
+}
+.tree-badge[data-type="heading"]{background:rgba(239,68,68,0.2);color:#f87171;}
+.tree-badge[data-type="warning"]{background:rgba(245,158,11,0.2);color:#fbbf24;}
+.tree-badge[data-type="footnote"]{background:rgba(16,185,129,0.2);color:#34d399;}
+.tree-badge[data-type="table"]{background:rgba(59,130,246,0.2);color:#60a5fa;}
+.tree-badge[data-type="spec"]{background:rgba(139,92,246,0.2);color:#a78bfa;}
+.tree-children{padding-left:1.25rem;margin-left:0.4rem;border-left:1px dashed var(--border-highlight);}
+.tree-item.collapsed>.tree-children{display:none;}
+.tree-empty{color:var(--text-muted);font-size:0.875rem;padding:0.5rem;}
+
+/* ── INSPECTOR ──────────────────────────────────────────── */
+.inspector-panel{
+  background-color:#0f172a;
+  border-top:1px solid var(--border-color);
+  padding:1.5rem;max-height:250px;overflow-y:auto;
+}
+.inspector-title{
+  font-size:0.75rem;font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem;
+}
+.inspector-grid{display:grid;grid-template-columns:80px 1fr;row-gap:0.5rem;}
+.inspector-label{font-size:0.8125rem;color:var(--text-muted);}
+.inspector-value{font-size:0.8125rem;color:var(--text-secondary);}
+.inspector-value.mono{font-family:var(--font-mono);font-size:0.75rem;}
+.inspector-text-label{
+  grid-column:1/-1;margin-top:0.5rem;
+  font-size:0.8125rem;font-weight:600;color:var(--text-muted);
+}
+.inspector-text-block{
+  grid-column:1/-1;
+  background:var(--bg-main);border:1px solid var(--border-color);
+  border-radius:0.375rem;padding:0.75rem;
+  max-height:100px;overflow-y:auto;
+  font-size:0.875rem;color:var(--text-main);
+  word-break:break-word;
+}
+.inspector-empty{font-size:0.8125rem;color:var(--text-muted);}
+
+/* ── JSON STRIP ─────────────────────────────────────────── */
+.json-strip{
+  background-color:var(--bg-card);
+  border-top:1px solid var(--border-color);
+  flex:none;
+}
+.json-header{
+  display:flex;align-items:center;gap:0.75rem;
+  padding:0.75rem 2rem;cursor:pointer;user-select:none;
+}
+.json-header h3{
+  font-size:0.875rem;font-weight:600;color:var(--text-secondary);
+  display:flex;align-items:center;gap:0.5rem;
+}
+.json-header h3::before{
+  content:'▶';font-size:0.6rem;transition:transform 0.2s;display:inline-block;
+}
+.json-strip.expanded .json-header h3::before{transform:rotate(90deg);}
+.json-content-wrapper{display:none;padding:0 2rem 0.75rem;position:relative;}
+.json-strip.expanded .json-content-wrapper{display:block;}
+.json-copy-btn{position:absolute;top:0;right:2.5rem;}
+#jsonOut{
+  width:100%;height:250px;resize:none;outline:none;
+  background:#0b0f19;border:1px solid var(--border-color);border-radius:0.5rem;
+  color:#34d399;font-family:var(--font-mono);font-size:0.75rem;
+  padding:0.75rem;line-height:1.5;
+}
+
+/* ── MODAL ──────────────────────────────────────────────── */
+.modal-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(11,15,25,0.85);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;opacity:0;pointer-events:none;
+  transition:opacity 0.2s ease-in-out;
+}
+.modal-overlay.open{opacity:1;pointer-events:auto;}
+.modal-box{
+  background:var(--bg-card);border:1px solid var(--border-highlight);
+  border-radius:0.75rem;width:90%;max-width:720px;max-height:85vh;
+  display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  transform:scale(0.95);transition:transform 0.2s ease-in-out;
+}
+.modal-overlay.open .modal-box{transform:scale(1);}
+.modal-head{
+  padding:1.25rem 1.5rem;border-bottom:1px solid var(--border-color);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.modal-head-title{font-family:var(--font-mono);font-size:0.875rem;font-weight:500;color:var(--accent-primary);}
+.modal-close{
+  background:transparent;border:none;color:var(--text-muted);
+  font-size:1.25rem;cursor:pointer;padding:0 0.25rem;
+  transition:color 0.15s;line-height:1;
+}
+.modal-close:hover{color:var(--text-main);}
+.modal-body{
+  padding:1.5rem;overflow-y:auto;
+  font-size:0.875rem;line-height:1.6;color:var(--text-main);
+}
+.modal-body h2{
+  font-size:1.125rem;font-weight:600;color:var(--text-main);
+  margin-bottom:1rem;
+}
+.modal-body h3{
+  font-size:0.875rem;font-weight:600;color:var(--accent-primary);
+  margin-top:1.25rem;margin-bottom:0.5rem;
+}
+.modal-body p{color:var(--text-secondary);margin-bottom:0.75rem;}
+.modal-body ul{color:var(--text-secondary);padding-left:1.25rem;margin-bottom:0.75rem;}
+.modal-body li{margin-bottom:0.375rem;line-height:1.7;}
+.modal-body strong{color:var(--text-main);}
+.type-chip{display:inline;font-weight:700;}
+.type-chip.heading{color:#f87171;}
+.type-chip.warning{color:#fbbf24;}
+.type-chip.footnote{color:#34d399;}
+.type-chip.table{color:#60a5fa;}
+.type-chip.spec{color:#a78bfa;}
+/* ── SPREADSHEET VIEWER ─────────────────────────────────────── */
+.spreadsheet-viewer{
+  width:100%;max-width:800px;border-radius:0.75rem;
+  border:1px solid var(--border-color);overflow:hidden;box-shadow:var(--shadow-lg);
+}
+.sheet-tabs{
+  display:flex;gap:0.375rem;padding:0.5rem 0.75rem;
+  background-color:var(--bg-card);border-bottom:1px solid var(--border-color);
+  overflow-x:auto;flex-wrap:wrap;
+}
+.sheet-table-wrapper{overflow:auto;max-height:calc(100vh - 280px);background:var(--bg-main);}
+.sheet-table{width:100%;border-collapse:collapse;}
+.sheet-table th{
+  background-color:var(--bg-input);color:var(--text-main);
+  font-weight:600;font-family:var(--font-mono);font-size:0.75rem;
+  padding:0.375rem 0.625rem;border:1px solid var(--border-color);
+  text-align:left;position:sticky;top:0;z-index:1;white-space:nowrap;
+}
+.sheet-table td{
+  color:var(--text-secondary);font-family:var(--font-mono);font-size:0.75rem;
+  padding:0.375rem 0.625rem;border:1px solid var(--border-color);
+  max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sheet-table tbody tr:nth-child(odd){background-color:var(--bg-card);}
+.sheet-table tbody tr:hover{background-color:rgba(99,102,241,0.08);cursor:pointer;}
+.sheet-table tbody tr.row-selected{background-color:rgba(99,102,241,0.15)!important;outline:1px solid rgba(99,102,241,0.3);}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo-section">
+    <div class="logo-wordmark">SpecStream</div>
+    <div class="logo-tagline">Blueprint &amp; Spec Sheet Segmenter</div>
+  </div>
+  <div class="header-controls">
+    <button class="btn btn-secondary" id="btnSample">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Sample
+    </button>
+    <button class="btn btn-secondary" id="btnUpload">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload PDF
+    </button>
+    <input type="file" id="fileInput" accept="application/pdf,.xlsx,.xls,.csv,.tsv">
+    <select class="mode-select" id="processingMode">
+      <option value="xycut">XY-Cut</option>
+      <option value="naive">Naive</option>
+    </select>
+    <button class="btn btn-primary" id="btnProcess">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Process
+    </button>
+    <a href="#" id="btnDocs" class="nav-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Docs
+    </a>
+    <a href="https://github.com/wizis17/SpecStream" target="_blank" class="nav-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span class="status-text" id="statusText">Ready — load a sample or upload a PDF to begin.</span>
+</div>
+
+<!-- MAIN -->
+<main class="main-container">
+
+  <!-- VIEWER PANEL -->
+  <div class="viewer-panel">
+    <div class="viewer-controls-bar">
+      <div class="page-navigation">
+        <button class="btn btn-secondary btn-sm" id="btnPrev">◀ Prev</button>
+        <span class="page-indicator" id="pageIndicator">Page 1 / 1</span>
+        <button class="btn btn-secondary btn-sm" id="btnNext">Next ▶</button>
+      </div>
+      <div class="meta-pills">
+        <span class="pill" id="pillPages">Pages: —</span>
+        <span class="pill" id="pillSheets" style="display:none;">Sheets: —</span>
+        <span class="pill" id="pillBlocks">Blocks: —</span>
+        <span class="pill" id="pillTime">Time: —</span>
+      </div>
+    </div>
+
+    <div class="pdf-viewport-container" id="viewportContainer" style="display:none;">
+      <canvas id="pageCanvas"></canvas>
+      <div class="bbox-overlay-layer" id="bboxLayer"></div>
+    </div>
+
+    <div class="spreadsheet-viewer" id="spreadsheetViewer" style="display:none;">
+      <div class="sheet-tabs" id="sheetTabs" style="display:none;"></div>
+      <div class="sheet-table-wrapper" id="sheetTableWrapper"></div>
+    </div>
+
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-icon">📄</div>
+      <h3>No document loaded</h3>
+      <p>Click <strong>Sample</strong> to load the built-in datasheet, or upload a PDF.</p>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar-panel">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Document Structure</div>
+      <div class="sidebar-meta" id="sidebarMeta">Load a document to see its outline.</div>
+    </div>
+    <div class="tree-container" id="treeContainer">
+      <div class="tree-empty">No document loaded.</div>
+    </div>
+    <div class="inspector-panel" id="inspectorPanel">
+      <div class="inspector-title">Inspector</div>
+      <div class="inspector-empty">Select a block to inspect its properties.</div>
+    </div>
+  </aside>
+
+</main>
+
+<!-- JSON STRIP -->
+<div class="json-strip" id="jsonStrip">
+  <div class="json-header" id="jsonHeader">
+    <h3>JSON Export</h3>
+  </div>
+  <div class="json-content-wrapper">
+    <button class="btn btn-secondary btn-xs json-copy-btn" id="btnCopyJson">Copy</button>
+    <textarea id="jsonOut" readonly spellcheck="false"></textarea>
+  </div>
+</div>
+
+<!-- DOCS MODAL -->
+<div class="modal-overlay" id="docsModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-head-title">SPECSTREAM // SYSTEM_MANUAL.md</span>
+      <button class="modal-close" id="closeDocsBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <h2>SpecStream Technical System Manual</h2>
+      <h3>1. The Problem Statement</h3>
+      <p>Standard PDF text extraction reads character streams in raw flow order. When encountering multi-column text blocks or sidebar specs, the stream bleeds left-to-right across columns, destroying logical reading sequence. Standard extractors also strip all semantic layout hierarchies.</p>
+      <h3>2. Dynamic XY-Cut Partitioning</h3>
+      <p>SpecStream resolves multi-column bleeding by executing a recursive spatial division algorithm based on projection profiles. Horizontal whitespace gaps split the page into top/bottom bands; vertical gaps split into left/right columns. The algorithm recurses until leaf nodes are established and ordered top-to-bottom, left-to-right.</p>
+      <p>Toggle <strong>Naive</strong> mode in the header to compare how a linear top-to-bottom parser bleeds the two specification columns together.</p>
+      <h3>3. Semantic Classification</h3>
+      <p>Each block is classified into one of five types:</p>
+      <ul>
+        <li><span class="type-chip heading">heading</span> — Numbered section titles (1., 1.1., etc.)</li>
+        <li><span class="type-chip warning">warning</span> — WARNING / CAUTION / NOTE blocks</li>
+        <li><span class="type-chip footnote">footnote</span> — Small-font annotations at page foot</li>
+        <li><span class="type-chip table">table</span> — Pipe-delimited tabular rows</li>
+        <li><span class="type-chip spec">spec</span> — Body text and specification lines (fallback)</li>
+      </ul>
+      <h3>4. Tree Hierarchy Reconstruction</h3>
+      <p>A stack-based assembler iterates the ordered classified blocks to construct a nested parent-child document tree. Headings act as parent nodes for their subsequent content blocks. The resulting hierarchy is shown in the sidebar and exported as JSON.</p>
+      <h3>5. Controls</h3>
+      <ul>
+        <li><strong>Sample:</strong> Load the built-in MCU datasheet demo.</li>
+        <li><strong>Upload PDF:</strong> Parse any client-side PDF (single page, heuristic extraction).</li>
+        <li><strong>XY-Cut / Naive:</strong> Toggle reading-order algorithm in real time.</li>
+        <li><strong>Bounding boxes:</strong> Hover for type-colored glow. Click to select and inspect.</li>
+        <li><strong>JSON Export:</strong> Expand the strip at the bottom to view or copy the full hierarchy JSON.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+const TYPES = {
+  heading:  { color:'#ef4444' },
+  warning:  { color:'#f59e0b' },
+  footnote: { color:'#10b981' },
+  table:    { color:'#3b82f6' },
+  spec:     { color:'#8b5cf6' },
+};
+
+// ── Sample data ──────────────────────────────────────────────────────────────
+function buildSampleBlocks(){
+  const B=[];let id=0;
+  const add=(x,y,w,h,fs,text)=>B.push({id:id++,page:1,x,y,w,h,fontSize:fs,text});
+  add(40, 24,600,22,20,'MCU-7400 SERIES — INDUSTRIAL MICROCONTROLLER');
+  add(40, 54,500,14,12,'Technical Datasheet · Revision 3.2 · June 2026');
+  add(40,110,360,14,15,'1. Electrical Characteristics');
+  add(40,132,360,14,12.5,'1.1 Power Supply');
+  add(40,154,360,14,11,'Operating Voltage ........... 1.8V – 3.6V');
+  add(40,176,360,14,11,'Active Supply Current ........ 4.2 mA typ');
+  add(40,198,360,14,11,'Standby Supply Current ....... 1.1 µA typ');
+  add(40,220,360,14,12.5,'1.2 Absolute Maximum Ratings');
+  add(40,242,360,14,10.5,'Parameter | Min | Max | Unit');
+  add(40,264,360,14,10.5,'Vdd | -0.3 | 4.0 | V');
+  add(40,286,360,14,10.5,'Tstg | -55 | 150 | °C');
+  add(40,308,360,14,10.5,'Iout (per pin) | — | 25 | mA');
+  add(40,330,360,14,12.5,'1.3 Clock & Timing');
+  add(40,352,360,14,11,'System Clock .................. up to 120 MHz');
+  add(40,374,360,14,11,'RTC Accuracy .................. ±20 ppm');
+  add(440,110,360,14,15,'2. Mechanical & Environmental');
+  add(440,132,360,14,12.5,'2.1 Package Options');
+  add(440,154,360,14,11,'Package Types ................. 64-LQFP / 48-QFN');
+  add(440,176,360,14,11,'Body Size ...................... 10×10 mm / 7×7 mm');
+  add(440,198,360,36,11,'⚠ CAUTION: Exceeding ratings in §1.2 may cause permanent equipment damage.¹');
+  add(440,242,360,14,12.5,'2.2 Operating Temperature');
+  add(440,264,360,14,11,'Industrial Grade ............... -40°C to +105°C');
+  add(440,286,360,14,11,'Standard Grade .................. 0°C to +70°C');
+  add(440,308,360,14,12.5,'2.3 Humidity & ESD');
+  add(440,330,360,14,11,'Storage Humidity ............... 5–95% RH non-cond.');
+  add(440,352,360,14,11,'ESD Rating (HBM/CDM) ........... ±4kV / ±1.5kV²');
+  add(40,420,740,14,9.5,'¹ See Section 1.2 — Absolute Maximum Ratings — for full derating curves.');
+  add(40,438,740,14,9.5,'² Tested per JESD22-A114 (HBM) and JESD22-C101 (CDM) standards.');
+  return {blocks:B,pageW:850,pageH:500,source:'sample'};
+}
+
+// ── Classification ────────────────────────────────────────────────────────────
+function classify(text,fontSize){
+  const t=text.replace(/\n/g,' ').trim();
+  if(/^[⚠]|^CAUTION\b|^WARNING\b|^NOTE:/i.test(t)) return 'warning';
+  if(fontSize<=10) return 'footnote';
+  if(/^(\d+(?:\.\d+)*)\s+\S/.test(t)) return 'heading';
+  if(/\|/.test(t)) return 'table';
+  return 'spec';
+}
+
+// ── XY-Cut ────────────────────────────────────────────────────────────────────
+const H_GAP=16,V_GAP=18;
+function mergedGaps(intervals,minGap){
+  if(!intervals.length) return [];
+  const s=intervals.slice().sort((a,b)=>a[0]-b[0]);
+  const m=[s[0].slice()];
+  for(let i=1;i<s.length;i++){
+    const last=m[m.length-1];
+    if(s[i][0]<=last[1]) last[1]=Math.max(last[1],s[i][1]);
+    else m.push(s[i].slice());
+  }
+  const gaps=[];
+  for(let i=1;i<m.length;i++){
+    const g=m[i][0]-m[i-1][1];
+    if(g>=minGap) gaps.push([m[i-1][1],m[i][0]]);
+  }
+  return gaps;
+}
+function xyCut(blocks,budget){
+  if(blocks.length<=1||budget<=0) return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
+  const hGaps=mergedGaps(blocks.map(b=>[b.y,b.y+b.h]),H_GAP);
+  if(hGaps.length){
+    const cut=hGaps[0];
+    return[...xyCut(blocks.filter(b=>b.y+b.h<=cut[0]+0.5),budget-1),
+           ...xyCut(blocks.filter(b=>b.y>=cut[1]-0.5),budget-1)];
+  }
+  const vGaps=mergedGaps(blocks.map(b=>[b.x,b.x+b.w]),V_GAP);
+  if(vGaps.length){
+    const cut=vGaps[0];
+    return[...xyCut(blocks.filter(b=>b.x+b.w<=cut[0]+0.5),budget-1),
+           ...xyCut(blocks.filter(b=>b.x>=cut[1]-0.5),budget-1)];
+  }
+  return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);
+}
+function naiveOrder(blocks){return blocks.slice().sort((a,b)=>a.y-b.y||a.x-b.x);}
+
+// ── Hierarchy ─────────────────────────────────────────────────────────────────
+function buildHierarchy(ordered){
+  const root={id:'root',type:'document',label:'Document',children:[]};
+  let footnoteGroup=null;
+  let stack=[{node:root,depth:0}];
+  function topAtMost(d){while(stack.length>1&&stack[stack.length-1].depth>=d)stack.pop();return stack[stack.length-1].node;}
+  ordered.forEach(b=>{
+    const leaf={id:b.id,type:b.type,label:b.text.replace(/\n/g,' '),block:b,children:[]};
+    if(b.type==='heading'){
+      const depth=(b.text.match(/^(\d+(?:\.\d+)*)/)||[''])[0].split('.').length+1;
+      topAtMost(depth).children.push(leaf);
+      stack.push({node:leaf,depth});
+    }else if(b.type==='footnote'){
+      if(!footnoteGroup){footnoteGroup={id:'footnotes',type:'footnote',label:'Footnotes',children:[]};root.children.push(footnoteGroup);}
+      footnoteGroup.children.push(leaf);
+    }else{
+      stack[stack.length-1].node.children.push(leaf);
+    }
+  });
+  return root;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let doc=null,blocksTyped=[],orderedBlocks=[],hierarchy=null;
+let useXY=true,selectedId=null,pageImage=null;
+let currentPage=1,totalPages=1,pdfDoc=null,pdfjsReady=null;
+let spreadsheetWorkbook=null,activeSheetIndex=0,spreadsheetJsonData=null;
+
+const canvas=document.getElementById('pageCanvas');
+const ctx=canvas.getContext('2d');
+const RES=1.4;
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state,text){
+  document.getElementById('statusDot').className='status-dot'+(state?' '+state:'');
+  document.getElementById('statusText').textContent=text;
+}
+
+// ── Pipeline ──────────────────────────────────────────────────────────────────
+function runPipeline(){
+  const t0=performance.now();
+  const isSheet=doc.source==='spreadsheet';
+  blocksTyped=doc.blocks.map(b=>({...b,type:b.type||classify(b.text,b.fontSize)}));
+  orderedBlocks=isSheet?blocksTyped:(useXY?xyCut(blocksTyped,40):naiveOrder(blocksTyped));
+  hierarchy=isSheet?buildSpreadsheetHierarchy():buildHierarchy(orderedBlocks);
+  const ms=Math.round(performance.now()-t0);
+
+  const pillPages=document.getElementById('pillPages');
+  const pillSheets=document.getElementById('pillSheets');
+  if(isSheet){
+    pillPages.style.display='none';
+    pillSheets.style.display='';
+    pillSheets.textContent='Sheets: '+(spreadsheetWorkbook?spreadsheetWorkbook.SheetNames.length:1);
+  }else{
+    pillPages.style.display='';
+    pillSheets.style.display='none';
+    pillPages.textContent='Pages: '+totalPages;
+  }
+  document.getElementById('pillBlocks').textContent='Blocks: '+blocksTyped.length;
+  document.getElementById('pillTime').textContent='Time: '+ms+'ms';
+  document.getElementById('pageIndicator').textContent=isSheet?(doc.sheetName||'Sheet 1'):('Page '+currentPage+' / '+totalPages);
+  document.getElementById('sidebarMeta').textContent=blocksTyped.length+' rows · '+(isSheet?doc.sheetName:(useXY?'XY-Cut':'Naive'));
+
+  if(isSheet){
+    renderSpreadsheetView();
+    document.getElementById('viewportContainer').style.display='none';
+    document.getElementById('emptyState').style.display='none';
+  }else{
+    document.getElementById('spreadsheetViewer').style.display='none';
+    renderCanvas();
+    renderBboxLayer();
+  }
+  renderTree();
+  renderJson();
+  if(!isSheet) setStatus('success','Processed '+blocksTyped.length+' blocks · '+ms+'ms');
+}
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+function renderCanvas(){
+  canvas.width=doc.pageW*RES;
+  canvas.height=doc.pageH*RES;
+  canvas.style.width=doc.pageW+'px';
+  canvas.style.height=doc.pageH+'px';
+  ctx.save();ctx.scale(RES,RES);ctx.clearRect(0,0,doc.pageW,doc.pageH);
+  if(doc.source==='sample'){
+    ctx.fillStyle='#f4f1e9';ctx.fillRect(0,0,doc.pageW,doc.pageH);
+    ctx.strokeStyle='#cfc8b4';ctx.lineWidth=1;ctx.strokeRect(0.5,0.5,doc.pageW-1,doc.pageH-1);
+    ctx.strokeStyle='#23262b';
+    ctx.beginPath();ctx.moveTo(40,82);ctx.lineTo(doc.pageW-40,82);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(40,408);ctx.lineTo(doc.pageW-40,408);ctx.stroke();
+    drawSampleText();
+  }else if(pageImage){
+    ctx.drawImage(pageImage,0,0,doc.pageW,doc.pageH);
+  }
+  ctx.restore();
+  document.getElementById('viewportContainer').style.display='inline-block';
+  document.getElementById('emptyState').style.display='none';
+}
+
+function drawSampleText(){
+  ctx.textBaseline='top';
+  blocksTyped.forEach(b=>{
+    ctx.font=(b.type==='heading'?'600 ':'400 ')+b.fontSize+'px "IBM Plex Mono",monospace';
+    ctx.fillStyle=b.type==='warning'?'#8a2f1f':(b.type==='footnote'?'#5b5347':'#23262b');
+    b.text.split('\n').forEach((line,i)=>ctx.fillText(line,b.x,b.y+i*14));
+  });
+}
+
+// ── Bbox overlay ──────────────────────────────────────────────────────────────
+function renderBboxLayer(){
+  const layer=document.getElementById('bboxLayer');
+  layer.innerHTML='';
+  blocksTyped.forEach(b=>{
+    const el=document.createElement('div');
+    el.className='bbox-overlay';
+    el.dataset.type=b.type;
+    el.dataset.id=String(b.id);
+    el.style.cssText=`left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;`;
+    el.addEventListener('click',()=>selectBlock(b.id));
+    el.addEventListener('mouseenter',()=>{
+      el.classList.add('bbox-hover');
+      const ti=document.querySelector(`.tree-item[data-id="${b.id}"]`);
+      if(ti)ti.querySelector('.tree-item-header').style.background='rgba(99,102,241,0.08)';
+    });
+    el.addEventListener('mouseleave',()=>{
+      el.classList.remove('bbox-hover');
+      const ti=document.querySelector(`.tree-item[data-id="${b.id}"]`);
+      if(ti&&!ti.classList.contains('tree-selected'))ti.querySelector('.tree-item-header').style.background='';
+    });
+    layer.appendChild(el);
+  });
+  applyBboxSelection();
+}
+
+function applyBboxSelection(){
+  document.querySelectorAll('.bbox-overlay').forEach(el=>{
+    el.classList.toggle('bbox-selected',el.dataset.id===String(selectedId));
+  });
+}
+
+// ── Select ────────────────────────────────────────────────────────────────────
+function selectBlock(id){
+  selectedId=id;
+  applyBboxSelection();
+  document.querySelectorAll('.tree-item').forEach(el=>el.classList.remove('tree-selected'));
+  document.querySelectorAll('.tree-item-header').forEach(el=>el.style.background='');
+  document.querySelectorAll('.sheet-table tbody tr').forEach(tr=>tr.classList.remove('row-selected'));
+  if(id!==null){
+    const ti=document.querySelector(`.tree-item[data-id="${id}"]`);
+    if(ti){ti.classList.add('tree-selected');ti.scrollIntoView({block:'nearest'});}
+    const tr=document.querySelector(`.sheet-table tbody tr[data-id="${id}"]`);
+    if(tr){tr.classList.add('row-selected');tr.scrollIntoView({block:'nearest'});}
+  }
+  renderInspector(id);
+}
+
+// ── Inspector ─────────────────────────────────────────────────────────────────
+function renderInspector(id){
+  const panel=document.getElementById('inspectorPanel');
+  if(id===null||id===undefined){
+    panel.innerHTML='<div class="inspector-title">Inspector</div><div class="inspector-empty">Select a block to inspect its properties.</div>';
+    return;
+  }
+  const b=blocksTyped.find(x=>x.id===id);
+  if(!b)return;
+  if(b.rowData){
+    const rows=Object.entries(b.rowData).map(([k,v])=>
+      `<span class="inspector-label" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;">${esc(String(k))}</span>
+       <span class="inspector-value mono">${esc(String(v??''))}</span>`
+    ).join('');
+    panel.innerHTML=`<div class="inspector-title">Inspector</div><div class="inspector-grid">${rows}</div>`;
+  }else{
+    panel.innerHTML=`
+      <div class="inspector-title">Inspector</div>
+      <div class="inspector-grid">
+        <span class="inspector-label">Type</span>
+        <span class="inspector-value">${b.type}</span>
+        <span class="inspector-label">Page</span>
+        <span class="inspector-value">${b.page}</span>
+        <span class="inspector-label">Position</span>
+        <span class="inspector-value mono">x:${Math.round(b.x)} y:${Math.round(b.y)}</span>
+        <span class="inspector-label">Size</span>
+        <span class="inspector-value mono">w:${Math.round(b.w)} h:${Math.round(b.h)}</span>
+        <span class="inspector-label">Font</span>
+        <span class="inspector-value mono">${b.fontSize}px</span>
+        <div class="inspector-text-label">Text content</div>
+        <div class="inspector-text-block">${esc(b.text)}</div>
+      </div>
+    `;
+  }
+}
+
+function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+// ── Tree ──────────────────────────────────────────────────────────────────────
+function renderTree(){
+  const container=document.getElementById('treeContainer');
+  container.innerHTML='';
+  container.appendChild(buildTreeNode(hierarchy));
+}
+
+function buildTreeNode(node){
+  const wrap=document.createElement('div');
+  wrap.className='tree-item';
+  wrap.dataset.id=String(node.id);
+
+  const header=document.createElement('div');
+  header.className='tree-item-header';
+
+  const hasKids=node.children&&node.children.length;
+  if(hasKids){
+    const toggle=document.createElement('span');
+    toggle.className='tree-toggle';
+    toggle.textContent='▼';
+    toggle.addEventListener('click',e=>{
+      e.stopPropagation();
+      wrap.classList.toggle('collapsed');
+      toggle.textContent=wrap.classList.contains('collapsed')?'▶':'▼';
+    });
+    header.appendChild(toggle);
+  }else{
+    const bullet=document.createElement('span');
+    bullet.className='tree-bullet';
+    bullet.textContent='•';
+    header.appendChild(bullet);
+  }
+
+  const label=document.createElement('span');
+  label.className='tree-label';
+  label.textContent=node.label;
+  header.appendChild(label);
+
+  if(node.type&&node.type!=='document'){
+    const badge=document.createElement('span');
+    badge.className='tree-badge';
+    badge.dataset.type=node.type;
+    badge.textContent=node.type;
+    header.appendChild(badge);
+  }
+
+  header.addEventListener('click',()=>{
+    if(typeof node.id==='number') selectBlock(node.id);
+  });
+
+  wrap.appendChild(header);
+  if(hasKids){
+    const kids=document.createElement('div');
+    kids.className='tree-children';
+    node.children.forEach(c=>kids.appendChild(buildTreeNode(c)));
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+// ── JSON ──────────────────────────────────────────────────────────────────────
+function toJson(node){
+  const o={type:node.type,label:node.label};
+  if(node.block) o.bbox={page:node.block.page,x:node.block.x,y:node.block.y,w:node.block.w,h:node.block.h};
+  if(node.children&&node.children.length) o.children=node.children.map(toJson);
+  return o;
+}
+function renderJson(){
+  const val=doc.source==='spreadsheet'&&spreadsheetJsonData
+    ?JSON.stringify(spreadsheetJsonData,null,2)
+    :JSON.stringify(toJson(hierarchy),null,2);
+  document.getElementById('jsonOut').value=val;
+}
+
+// ── JSON strip ────────────────────────────────────────────────────────────────
+document.getElementById('jsonHeader').addEventListener('click',()=>{
+  document.getElementById('jsonStrip').classList.toggle('expanded');
+});
+document.getElementById('btnCopyJson').addEventListener('click',function(){
+  navigator.clipboard.writeText(document.getElementById('jsonOut').value).then(()=>{
+    this.textContent='Copied!';
+    this.style.cssText='background-color:rgba(16,185,129,0.1);color:#10b981;';
+    setTimeout(()=>{this.textContent='Copy';this.style.cssText='';},2000);
+  });
+});
+
+// ── Mode select ───────────────────────────────────────────────────────────────
+document.getElementById('processingMode').addEventListener('change',function(){
+  useXY=this.value==='xycut';
+  if(doc) runPipeline();
+});
+
+// ── Process button ────────────────────────────────────────────────────────────
+document.getElementById('btnProcess').addEventListener('click',()=>{if(doc)runPipeline();});
+
+// ── Page navigation ───────────────────────────────────────────────────────────
+document.getElementById('btnPrev').addEventListener('click',async()=>{
+  if(currentPage>1){currentPage--;if(pdfDoc){await loadPdfPage(currentPage);}runPipeline();}
+});
+document.getElementById('btnNext').addEventListener('click',async()=>{
+  if(currentPage<totalPages){currentPage++;if(pdfDoc){await loadPdfPage(currentPage);}runPipeline();}
+});
+
+// ── Sample ────────────────────────────────────────────────────────────────────
+document.getElementById('btnSample').addEventListener('click',()=>{
+  pdfDoc=null;pageImage=null;totalPages=1;currentPage=1;
+  spreadsheetWorkbook=null;activeSheetIndex=0;spreadsheetJsonData=null;
+  document.getElementById('spreadsheetViewer').style.display='none';
+  doc=buildSampleBlocks();selectedId=null;
+  setStatus('info','Loading sample datasheet…');
+  runPipeline();
+});
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+document.getElementById('btnUpload').addEventListener('click',()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change',handleFileUpload);
+
+function loadPdfJs(){
+  if(pdfjsReady) return pdfjsReady;
+  pdfjsReady=new Promise((resolve,reject)=>{
+    if(window._pdfjsLoadError || !window.pdfjsLib){
+      reject(new Error('pdf.js could not be fetched from CDN. Check your internet connection and reload the page.'));
+    } else {
+      resolve();
+    }
+  });
+  return pdfjsReady;
+}
+
+async function loadPdfPage(pageNum){
+  const page=await pdfDoc.getPage(pageNum);
+  const scale=1.6,viewport=page.getViewport({scale});
+  const off=document.createElement('canvas');
+  off.width=viewport.width;off.height=viewport.height;
+  await page.render({canvasContext:off.getContext('2d'),viewport}).promise;
+  pageImage=off;
+  const content=await page.getTextContent();
+  const blocks=[];let id=0;
+  content.items.forEach(item=>{
+    if(!item.str||!item.str.trim()) return;
+    const fs=Math.hypot(item.transform[2],item.transform[3])||10;
+    const p1=viewport.convertToViewportPoint(item.transform[4],item.transform[5]);
+    const w=(item.width||(item.str.length*fs*0.5))*scale;
+    const h=fs*scale*1.15;
+    blocks.push({id:id++,page:pageNum,x:p1[0],y:p1[1]-h*0.8,w,h,fontSize:fs*scale*0.72,text:item.str});
+  });
+  doc={blocks,pageW:viewport.width,pageH:viewport.height,source:'pdf'};
+}
+
+async function handleFileUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  e.target.value='';
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(['xlsx','xls','csv','tsv'].includes(ext)){await handleSpreadsheet(file);return;}
+  setStatus('info','Loading '+file.name+'…');
+  try{
+    await loadPdfJs();
+    const buf=await file.arrayBuffer();
+    pdfDoc=await window.pdfjsLib.getDocument({data:buf}).promise;
+    totalPages=pdfDoc.numPages;currentPage=1;
+    spreadsheetWorkbook=null;activeSheetIndex=0;spreadsheetJsonData=null;
+    await loadPdfPage(currentPage);
+    selectedId=null;
+    setStatus('info',file.name+' · page '+currentPage+' of '+totalPages);
+    runPipeline();
+  }catch(err){
+    setStatus('error','Failed to parse: '+err.message);
+  }
+}
+
+// ── Spreadsheet ───────────────────────────────────────────────────────────────
+function buildSheetBlocks(workbook,sheetIndex){
+  const sheetName=workbook.SheetNames[sheetIndex];
+  const sheet=workbook.Sheets[sheetName];
+  const json=XLSX.utils.sheet_to_json(sheet,{defval:''});
+  const headers=json.length?Object.keys(json[0]):[];
+  const blocks=json.map((row,i)=>({
+    id:i,page:1,
+    x:0,y:i*20,w:800,h:20,
+    fontSize:11,
+    text:headers.map(h=>String(row[h]??'')).join(' | '),
+    type:'table',
+    rowData:row,
+    headers,
+  }));
+  return{blocks,pageW:800,pageH:Math.max(blocks.length*20,400),
+    source:'spreadsheet',sheetName,sheetIndex,
+    headers,rowCount:json.length,colCount:headers.length,workbook};
+}
+
+function buildSpreadsheetHierarchy(){
+  const root={id:'root',type:'document',label:'Document',children:[]};
+  const wb=spreadsheetWorkbook;
+  if(!wb){return root;}
+  wb.SheetNames.forEach((name,si)=>{
+    const isActive=si===activeSheetIndex;
+    const children=isActive?orderedBlocks.map(b=>({
+      id:b.id,type:'table',
+      label:b.text.length>60?b.text.slice(0,60)+'…':b.text,
+      block:b,children:[],
+    })):[];
+    const meta=isActive?' ('+doc.rowCount+' rows × '+doc.colCount+' cols)':'';
+    root.children.push({id:'sheet-'+si,type:'table',label:name+meta,block:null,children});
+  });
+  return root;
+}
+
+function renderSpreadsheetView(){
+  const wb=spreadsheetWorkbook;
+  const tabsEl=document.getElementById('sheetTabs');
+  const wrapper=document.getElementById('sheetTableWrapper');
+
+  if(wb&&wb.SheetNames.length>1){
+    tabsEl.innerHTML='';
+    wb.SheetNames.forEach((name,i)=>{
+      const btn=document.createElement('button');
+      btn.className='btn btn-sm '+(i===activeSheetIndex?'btn-primary':'btn-secondary');
+      btn.textContent=name;
+      btn.addEventListener('click',()=>{
+        activeSheetIndex=i;
+        doc=buildSheetBlocks(wb,i);
+        selectedId=null;
+        runPipeline();
+      });
+      tabsEl.appendChild(btn);
+    });
+    tabsEl.style.display='flex';
+  }else{
+    tabsEl.style.display='none';
+  }
+
+  const{headers,blocks}=doc;
+  const table=document.createElement('table');
+  table.className='sheet-table';
+  const thead=document.createElement('thead');
+  const hrow=document.createElement('tr');
+  headers.forEach(h=>{const th=document.createElement('th');th.textContent=h;hrow.appendChild(th);});
+  thead.appendChild(hrow);table.appendChild(thead);
+  const tbody=document.createElement('tbody');
+  blocks.forEach(b=>{
+    const tr=document.createElement('tr');
+    tr.dataset.id=String(b.id);
+    tr.classList.toggle('row-selected',b.id===selectedId);
+    headers.forEach(h=>{
+      const td=document.createElement('td');
+      td.textContent=String(b.rowData[h]??'');
+      td.title=String(b.rowData[h]??'');
+      tr.appendChild(td);
+    });
+    tr.addEventListener('click',()=>selectBlock(b.id));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrapper.innerHTML='';wrapper.appendChild(table);
+  document.getElementById('spreadsheetViewer').style.display='block';
+}
+
+async function handleSpreadsheet(file){
+  setStatus('info','Spreadsheet loaded — '+file.name);
+  try{
+    if(!window.XLSX) throw new Error('SheetJS not loaded. Check your internet connection and reload.');
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    spreadsheetWorkbook=wb;activeSheetIndex=0;
+    pdfDoc=null;pageImage=null;totalPages=1;currentPage=1;selectedId=null;
+    spreadsheetJsonData=wb.SheetNames.map((name,si)=>{
+      const sheet=wb.Sheets[name];
+      const json=XLSX.utils.sheet_to_json(sheet,{defval:''});
+      const headers=json.length?Object.keys(json[0]):[];
+      return{type:'table',id:1000+si,source:'spreadsheet',
+        sheet_name:name,sheet_index:si,
+        row_count:json.length,col_count:headers.length,
+        headers,content:json};
+    });
+    doc=buildSheetBlocks(wb,0);
+    const t0=performance.now();
+    runPipeline();
+    const ms=Math.round(performance.now()-t0);
+    const totalRows=spreadsheetJsonData.reduce((a,s)=>a+s.row_count,0);
+    setStatus('success','Converted '+wb.SheetNames.length+' sheet(s) · '+totalRows+' total rows · '+ms+'ms');
+  }catch(err){
+    setStatus('error','Failed to parse spreadsheet: '+err.message);
+  }
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+const modal=document.getElementById('docsModal');
+document.getElementById('btnDocs').addEventListener('click',e=>{e.preventDefault();modal.classList.add('open');});
+document.getElementById('closeDocsBtn').addEventListener('click',()=>modal.classList.remove('open'));
+modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open');});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+doc=buildSampleBlocks();
+runPipeline();
+
+})();
+</script>
+</body>
+</html>

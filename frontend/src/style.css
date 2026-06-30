@@ -446,6 +446,17 @@ pre#json-out {
   word-break: break-word;
 }
 
+pre#md-out {
+  margin: 0;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: #a5d8c0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ─── Status Bar ─── */
 .statusbar {
   display: flex;
@@ -620,4 +631,65 @@ pre#json-out {
   padding: 8px 16px;
   border-left: 3px solid var(--line-cyan);
   background: rgba(79, 184, 201, 0.05);
+}
+
+/* ─── Spreadsheet Viewer ─── */
+.sheet-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-cyan-dim);
+  background: var(--bg-panel-2);
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.sheet-table-container {
+  overflow: auto;
+  flex: 1;
+}
+
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.sheet-table th {
+  background: var(--bg-panel-2);
+  color: var(--line-cyan);
+  font-weight: 600;
+  padding: 6px 10px;
+  border: 1px solid var(--line-cyan-dim);
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+  letter-spacing: .04em;
+}
+
+.sheet-table td {
+  color: var(--text-dim);
+  padding: 5px 10px;
+  border: 1px solid rgba(44,79,89,.35);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-table tbody tr:nth-child(odd) { background: rgba(19,40,58,.5); }
+.sheet-table tbody tr:hover { background: rgba(79,184,201,.08); cursor: pointer; }
+.sheet-table tbody tr.row-selected { background: rgba(79,184,201,.15) !important; outline: 1px solid var(--line-cyan-dim); }
+.sheet-table tbody tr.row-selected td { color: var(--text-primary); }
+
+.sheet-empty {
+  padding: 40px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: .5;
 }

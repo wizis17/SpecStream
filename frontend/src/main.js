@@ -38,8 +38,16 @@ let renderScale = 1;
 let useXY = true;
 let activeFilters = new Set(Object.keys(TYPES));
 
+// Spreadsheet state
+let sheetWorkbook = null;
+let sheetData = [];   // [{name, json, headers}]
+let activeSheetIdx = 0;
+
 // ─── DOM refs ───
-const pdfUpload       = document.getElementById('pdf-upload');
+const spreadsheetWrapper  = document.getElementById('spreadsheet-wrapper');
+const sheetTabsEl         = document.getElementById('sheet-tabs');
+const sheetTableContainer = document.getElementById('sheet-table-container');
+const pdfUpload           = document.getElementById('pdf-upload');
 const uploadLabel     = document.getElementById('upload-label');
 const useTestPdfBtn   = document.getElementById('use-test-pdf');
 const processBtn      = document.getElementById('process-btn');
@@ -64,6 +72,8 @@ const treeOut         = document.getElementById('tree-out');
 const rawOut          = document.getElementById('raw-out');
 const jsonOut         = document.getElementById('json-out');
 const btnCopyJson     = document.getElementById('btn-copy-json');
+const mdOut           = document.getElementById('md-out');
+const btnCopyMd       = document.getElementById('btn-copy-md');
 const stBlocks        = document.getElementById('st-blocks');
 const stPages         = document.getElementById('st-pages');
 const stTime          = document.getElementById('st-time');
@@ -462,6 +472,7 @@ async function processLayout() {
     renderTree(parsedHierarchy);
     renderRaw(flatNodes);
     jsonOut.textContent = JSON.stringify(data.hierarchy, null, 2);
+    renderMarkdown(parsedHierarchy);
     renderOverlays();
 
     setStatus('Layout parsed — ' + flatNodes.length + ' blocks in ' + elapsed + 's');
@@ -469,6 +480,377 @@ async function processLayout() {
   } catch (err) {
     setStatus('Error: ' + err.message);
     console.error(err);
+  }
+}
+
+// ─── Spreadsheet support ──────────────────────────────────────────────────────
+
+async function handleExcelFile(file) {
+  if (!window.XLSX) {
+    setStatus('Error: SheetJS library not loaded. Check your internet connection.');
+    return;
+  }
+  setStatus(`Parsing ${file.name}…`);
+  try {
+    const buf = await file.arrayBuffer();
+    sheetWorkbook = XLSX.read(buf, { type: 'array' });
+    sheetData = sheetWorkbook.SheetNames.map(name => {
+      const sheet = sheetWorkbook.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const headers = json.length ? Object.keys(json[0]) : [];
+      return { name, json, headers };
+    });
+    activeSheetIdx = 0;
+
+    // Switch view
+    stageEmpty.style.display = 'none';
+    canvasWrapper.style.display = 'none';
+    spreadsheetWrapper.style.display = 'flex';
+    pageNav.style.display = 'none';
+
+    renderSheetTabs();
+    renderSheetTable(0);
+    renderSheetTree();
+    renderSheetRaw();
+    renderSheetJson();
+
+    const totalRows = sheetData.reduce((a, s) => a + s.json.length, 0);
+    blockCount.textContent = totalRows + ' rows';
+    stBlocks.textContent = totalRows;
+    stPages.textContent = sheetWorkbook.SheetNames.length + ' sheet(s)';
+    stTime.textContent = '—';
+    stSel.textContent = '—';
+    if (fileChip) fileChip.textContent = `${file.name} — ${sheetWorkbook.SheetNames.length} sheet(s)`;
+    modeLabel.textContent = 'SPREADSHEET';
+    setStatus(`Parsed ${sheetWorkbook.SheetNames.length} sheet(s) · ${totalRows} total rows`);
+  } catch (err) {
+    setStatus(`Error parsing spreadsheet: ${err.message}`);
+  }
+}
+
+function renderSheetTabs() {
+  sheetTabsEl.innerHTML = '';
+  if (sheetData.length <= 1) { sheetTabsEl.style.display = 'none'; return; }
+  sheetTabsEl.style.display = 'flex';
+  sheetData.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn' + (i === activeSheetIdx ? ' active' : '');
+    btn.textContent = s.name;
+    btn.addEventListener('click', () => {
+      activeSheetIdx = i;
+      renderSheetTabs();
+      renderSheetTable(i);
+    });
+    sheetTabsEl.appendChild(btn);
+  });
+}
+
+function renderSheetTable(idx) {
+  const { json, headers } = sheetData[idx];
+  sheetTableContainer.innerHTML = '';
+  if (!json.length) {
+    sheetTableContainer.innerHTML = '<div class="sheet-empty">Sheet is empty</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'sheet-table';
+
+  const thead = document.createElement('thead');
+  const hrow = document.createElement('tr');
+  headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; hrow.appendChild(th); });
+  thead.appendChild(hrow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  json.forEach((row, ri) => {
+    const tr = document.createElement('tr');
+    tr.dataset.rowIndex = ri;
+    headers.forEach(h => {
+      const td = document.createElement('td');
+      const val = String(row[h] ?? '');
+      td.textContent = val;
+      td.title = val;
+      tr.appendChild(td);
+    });
+    tr.addEventListener('click', () => selectSheetRow(idx, ri, row, headers));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  sheetTableContainer.appendChild(table);
+}
+
+function selectSheetRow(sheetIdx, rowIdx, row, headers) {
+  sheetTableContainer.querySelectorAll('tr.row-selected').forEach(r => r.classList.remove('row-selected'));
+  const tr = sheetTableContainer.querySelector(`tr[data-row-index="${rowIdx}"]`);
+  if (tr) { tr.classList.add('row-selected'); tr.scrollIntoView({ block: 'nearest' }); }
+
+  treeOut.querySelectorAll('.node-row').forEach(r => r.classList.remove('selected'));
+  const treeRow = treeOut.querySelector(`.node-row[data-sheet="${sheetIdx}"][data-row="${rowIdx}"]`);
+  if (treeRow) { treeRow.classList.add('selected'); treeRow.scrollIntoView({ block: 'nearest' }); }
+
+  rawOut.querySelectorAll('.rawrow').forEach(r => r.classList.toggle('selected', r.dataset.sheet == sheetIdx && r.dataset.row == rowIdx));
+
+  detailBox.innerHTML =
+    `<span class="type-tag" style="background:var(--c-table)">table-row</span>` +
+    `<span class="crumb">${escapeHtml(sheetData[sheetIdx].name)}</span>` +
+    `<div class="text">${headers.map(h => `<b>${escapeHtml(h)}:</b> ${escapeHtml(String(row[h] ?? ''))}`).join('  ·  ')}</div>`;
+
+  stSel.textContent = `row ${rowIdx + 1}`;
+}
+
+function renderSheetTree() {
+  treeOut.innerHTML = '';
+  const root = document.createElement('div');
+  root.className = 'node';
+  root.innerHTML = `<div class="node-row"><span class="twist">▾</span><span class="label"><div>Document</div></span></div>`;
+  const rootKids = document.createElement('div');
+  rootKids.className = 'children';
+
+  sheetData.forEach((sheet, si) => {
+    const sheetWrap = document.createElement('div');
+    sheetWrap.className = 'node';
+    const sheetRow = document.createElement('div');
+    sheetRow.className = 'node-row';
+    sheetRow.innerHTML =
+      `<span class="twist">${sheet.json.length ? '▾' : '·'}</span>` +
+      `<span class="dot" style="background:var(--c-table)"></span>` +
+      `<span class="label"><div>${escapeHtml(sheet.name)}</div>` +
+      `<small>table · ${sheet.json.length} rows × ${sheet.headers.length} cols</small></span>`;
+    sheetRow.addEventListener('click', e => {
+      e.stopPropagation();
+      activeSheetIdx = si;
+      renderSheetTabs();
+      renderSheetTable(si);
+    });
+    sheetWrap.appendChild(sheetRow);
+
+    if (sheet.json.length) {
+      const kids = document.createElement('div');
+      kids.className = 'children';
+      kids.style.display = 'none'; // collapsed by default — too many rows to show all
+      sheetRow.querySelector('.twist').textContent = '▶';
+      sheetRow.querySelector('.twist').addEventListener('click', e => {
+        e.stopPropagation();
+        const collapsed = kids.style.display === 'none';
+        kids.style.display = collapsed ? '' : 'none';
+        sheetRow.querySelector('.twist').textContent = collapsed ? '▾' : '▶';
+      });
+
+      sheet.json.forEach((row, ri) => {
+        const rowWrap = document.createElement('div');
+        rowWrap.className = 'node';
+        const rowRow = document.createElement('div');
+        rowRow.className = 'node-row';
+        rowRow.dataset.sheet = si;
+        rowRow.dataset.row = ri;
+        const preview = sheet.headers.slice(0, 3).map(h => String(row[h] ?? '')).filter(Boolean).join(' · ');
+        rowRow.innerHTML = `<span class="twist">·</span><span class="label"><div>${escapeHtml(preview.substring(0, 70))}</div></span>`;
+        rowRow.addEventListener('click', e => {
+          e.stopPropagation();
+          activeSheetIdx = si;
+          renderSheetTabs();
+          renderSheetTable(si);
+          requestAnimationFrame(() => selectSheetRow(si, ri, row, sheet.headers));
+        });
+        rowWrap.appendChild(rowRow);
+        kids.appendChild(rowWrap);
+      });
+      sheetWrap.appendChild(kids);
+    }
+    rootKids.appendChild(sheetWrap);
+  });
+
+  root.appendChild(rootKids);
+  treeOut.appendChild(root);
+}
+
+function renderSheetRaw() {
+  rawOut.innerHTML = '';
+  sheetData.forEach((sheet, si) => {
+    sheet.json.forEach((row, ri) => {
+      const div = document.createElement('div');
+      div.className = 'rawrow';
+      div.dataset.sheet = si;
+      div.dataset.row = ri;
+      const preview = sheet.headers.slice(0, 3).map(h => String(row[h] ?? '')).filter(Boolean).join(' | ');
+      div.innerHTML =
+        `<span class="idx">${ri + 1}</span>` +
+        `<span class="ty" style="color:var(--c-table)">${escapeHtml(sheet.name)}</span>` +
+        `<span class="tx">${escapeHtml(preview)}</span>`;
+      div.addEventListener('click', () => {
+        activeSheetIdx = si;
+        renderSheetTabs();
+        renderSheetTable(si);
+        requestAnimationFrame(() => selectSheetRow(si, ri, row, sheet.headers));
+      });
+      rawOut.appendChild(div);
+    });
+  });
+}
+
+function renderSheetJson() {
+  const data = sheetData.map((s, i) => ({
+    type: 'table',
+    id: 1000 + i,
+    source: 'spreadsheet',
+    sheet_name: s.name,
+    sheet_index: i,
+    row_count: s.json.length,
+    col_count: s.headers.length,
+    headers: s.headers,
+    content: s.json,
+  }));
+  jsonOut.textContent = JSON.stringify(data, null, 2);
+}
+
+function resetSpreadsheetState() {
+  sheetWorkbook = null;
+  sheetData = [];
+  activeSheetIdx = 0;
+  spreadsheetWrapper.style.display = 'none';
+}
+
+// ─── Markdown support ────────────────────────────────────────────────────────
+
+function hierarchyToMarkdown(nodes, depth = 0) {
+  if (!nodes || !nodes.length) return '';
+  const parts = [];
+  let specBuf = [];
+
+  function flushSpec() {
+    if (!specBuf.length) return;
+    parts.push(specBuf.join(' '));
+    specBuf = [];
+  }
+
+  for (const node of nodes) {
+    const text = (node.label || node.text || '').trim();
+    const type = node.type || 'spec';
+
+    if (type === 'heading') {
+      flushSpec();
+      const level = Math.min(depth + 1, 6);
+      parts.push('#'.repeat(level) + ' ' + text);
+    } else if (type === 'warning') {
+      flushSpec();
+      parts.push('> **WARNING:** ' + text);
+    } else if (type === 'footnote') {
+      flushSpec();
+      parts.push('*' + text + '*');
+    } else if (type === 'table' || type === 'table-header' || type === 'table-row') {
+      flushSpec();
+      parts.push('`' + text + '`');
+    } else {
+      if (text) specBuf.push(text);
+    }
+
+    if (node.children && node.children.length) {
+      flushSpec();
+      parts.push(hierarchyToMarkdown(node.children, depth + 1));
+    }
+  }
+  flushSpec();
+  return parts.join('\n\n');
+}
+
+function renderMarkdown(hierarchy) {
+  if (!mdOut) return;
+  if (!hierarchy || !hierarchy.children) {
+    mdOut.textContent = '';
+    return;
+  }
+  mdOut.textContent = hierarchyToMarkdown(hierarchy.children).trim();
+}
+
+function parseMdToHierarchy(text) {
+  const lines = text.split('\n');
+  const root = { type: 'document', label: 'Document', children: [] };
+  const stack = [root];
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line) continue;
+
+    // Headings
+    const hMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (hMatch) {
+      const level = hMatch[1].length;
+      const node = { type: 'heading', label: hMatch[2].trim(), children: [], _mdLevel: level };
+      // pop stack until we find a parent of lower heading level
+      while (stack.length > 1 && (stack[stack.length - 1]._mdLevel || 0) >= level) stack.pop();
+      stack[stack.length - 1].children.push(node);
+      stack.push(node);
+      continue;
+    }
+
+    // Blockquote → warning
+    const bqMatch = line.match(/^>\s*(.*)/);
+    if (bqMatch) {
+      const node = { type: 'warning', label: bqMatch[1].trim(), children: [] };
+      stack[stack.length - 1].children.push(node);
+      continue;
+    }
+
+    // Markdown table row
+    if (line.startsWith('|')) {
+      const isSep = /^\|[\s\-:|]+\|/.test(line);
+      if (!isSep) {
+        const cells = line.split('|').filter((_, i, a) => i > 0 && i < a.length - 1).map(c => c.trim());
+        const node = { type: 'table-row', label: cells.join(' | '), children: [] };
+        stack[stack.length - 1].children.push(node);
+      }
+      continue;
+    }
+
+    // Italic-only line → footnote
+    if (/^\*[^*]+\*$/.test(line.trim())) {
+      const node = { type: 'footnote', label: line.trim().replace(/^\*|\*$/g, ''), children: [] };
+      stack[stack.length - 1].children.push(node);
+      continue;
+    }
+
+    // Default → spec
+    const node = { type: 'spec', label: line.trim(), children: [] };
+    stack[stack.length - 1].children.push(node);
+  }
+
+  return root;
+}
+
+async function handleMarkdownFile(file) {
+  setStatus(`Parsing ${file.name}…`);
+  resetSpreadsheetState();
+  try {
+    const text = await file.text();
+    const hierarchy = parseMdToHierarchy(text);
+    _idCounter = 0;
+    parsedHierarchy = hierarchy;
+    assignIds(parsedHierarchy.children);
+    parsedHierarchy._id = 'root';
+
+    flatNodes = flatten(parsedHierarchy.children);
+    blockCount.textContent = flatNodes.length + ' blocks';
+    stBlocks.textContent = flatNodes.length;
+    stPages.textContent = '—';
+    stTime.textContent = '0s';
+
+    renderLegend();
+    renderTree(parsedHierarchy);
+    renderRaw(flatNodes);
+    jsonOut.textContent = JSON.stringify(parsedHierarchy.children, null, 2);
+    renderMarkdown(parsedHierarchy);
+
+    // Hide PDF viewer, show empty stage
+    canvasWrapper.style.display = 'none';
+    stageEmpty.style.display = 'flex';
+    pageNav.style.display = 'none';
+    overlayContainer.innerHTML = '';
+
+    setStatus(`Markdown parsed — ${flatNodes.length} blocks from ${file.name}`);
+    modeLabel.textContent = 'MARKDOWN FILE';
+    if (fileChip) fileChip.textContent = file.name;
+  } catch (err) {
+    setStatus('Error: ' + err.message);
   }
 }
 
@@ -482,6 +864,20 @@ uploadLabel.addEventListener('click', () => {
 pdfUpload.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  e.target.value = ''; // allow re-selecting same file
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext)) {
+    await handleExcelFile(file);
+    return;
+  }
+  if (ext === 'md') {
+    await handleMarkdownFile(file);
+    return;
+  }
+
+  // PDF path — reset any spreadsheet state first
+  resetSpreadsheetState();
   currentPdfData = file;
   const buf = await file.arrayBuffer();
   await loadPdfData(new Blob([buf]), file.name);
@@ -490,6 +886,7 @@ pdfUpload.addEventListener('change', async (e) => {
 
 // Sample PDF
 useTestPdfBtn.addEventListener('click', async () => {
+  resetSpreadsheetState();
   setStatus('Fetching sample PDF…');
   try {
     const blob = await fetchTestPdf();
@@ -552,6 +949,16 @@ btnCopyJson.addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'specstream-hierarchy.json';
+  a.click();
+});
+
+// Download Markdown
+btnCopyMd.addEventListener('click', () => {
+  if (!mdOut || !mdOut.textContent) return;
+  const blob = new Blob([mdOut.textContent], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'specstream-output.md';
   a.click();
 });
 

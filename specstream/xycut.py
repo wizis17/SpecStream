@@ -104,9 +104,7 @@ def xycut(items, h_gap=10, v_gap=10):
         right_items = [item for item in items if item['bbox'][0] >= x_gap_start + v_gap]
         return xycut(left_items, h_gap, v_gap) + xycut(right_items, h_gap, v_gap)
 
-    # No cut found: sort by y, then x
-    # Debug print
-    print("DEBUG: no cut found, sorting by y then x")
+    # No cut found: sort by y then x (leaf node)
     return sorted(items, key=lambda item: (item['bbox'][1], item['bbox'][0]))
 
 if __name__ == "__main__":

@@ -27,36 +27,27 @@ def calculate_suggested_gaps(items):
     return suggested_gap, suggested_gap
 
 
-def process_pdf(pdf_path):
+def process_pdf(pdf_path, mode='xycut'):
     """
     Run the full pipeline on a PDF and return the JSON hierarchy tree.
-    Steps:
-        1. Extract text items with bboxes (from all pages)
-        2. Group items by page number
-        3. For each page, determine reading order using XY-cut with
-           dynamically calculated gap thresholds
-        4. Concatenate ordered items from all pages (in page order)
-        5. Classify each item
-        6. Build hierarchy
-        7. Export JSON tree
+    Args:
+        pdf_path: path to PDF file, or raw bytes
+        mode: 'xycut' (default) or 'naive' (simple top-to-bottom scan)
     Returns:
-        json_tree: list of top-level nodes (as per export_json_tree)
-        ordered_items: the items in reading order (after XY-cut) for debugging
+        json_tree: list of top-level nodes
+        ordered_items: items in reading order for debugging
     """
     from .extraction import extract_text_items
     from .xycut import xycut
     from .classification import classify_items
     from .hierarchy import build_hierarchy, export_json_tree
 
-    # Step 1: extraction
     text_items = extract_text_items(pdf_path)
     if not text_items:
         raise ValueError("No text items extracted from PDF")
 
-    # Calculate suggested gap thresholds based on document statistics
     suggested_h_gap, suggested_v_gap = calculate_suggested_gaps(text_items)
 
-    # Step 2: Group items by page number
     pages = {}
     for item in text_items:
         page_num = item['page']
@@ -64,14 +55,13 @@ def process_pdf(pdf_path):
             pages[page_num] = []
         pages[page_num].append(item)
 
-    # Step 3: For each page, determine reading order using XY-cut
     ordered_items = []
-    # Process pages in order
     for page_num in sorted(pages.keys()):
         page_items = pages[page_num]
-        # Apply XY-cut to get reading order within this page
-        # Use dynamically calculated gap thresholds
-        page_ordered = xycut(page_items, h_gap=suggested_h_gap, v_gap=suggested_v_gap)
+        if mode == 'naive':
+            page_ordered = sorted(page_items, key=lambda i: (i['bbox'][1], i['bbox'][0]))
+        else:
+            page_ordered = xycut(page_items, h_gap=suggested_h_gap, v_gap=suggested_v_gap)
         ordered_items.extend(page_ordered)
 
     # Step 4: (already done above - concatenated ordered items from all pages)

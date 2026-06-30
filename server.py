@@ -1,13 +1,18 @@
 import http.server
 import json
+import mimetypes
 import os
 import sys
+from urllib.parse import urlparse, parse_qs
 
-# Add the parent directory to the path so we can import the specstream module
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from specstream.pipeline import process_pdf
 
 PORT = 8000
+DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'dist')
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
+FRONTEND_INDEX = os.path.join(FRONTEND_DIR, 'index.html')
+FRONTEND_APP = os.path.join(FRONTEND_DIR, 'app.html')
 
 class SpecStreamRequestHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -26,30 +31,58 @@ class SpecStreamRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        # Serve frontend and files
-        path = self.path
-        if path == '/' or path == '/index.html' or path == '/specstream-demo.html':
-            self.serve_file('index.html', 'text/html')
-        elif path == '/test.pdf':
+        path = urlparse(self.path).path
+
+        # Always serve test.pdf from root
+        if path == '/test.pdf':
             self.serve_file('test.pdf', 'application/pdf')
-        elif path == '/frontend/public/Mint.jpg' or path == '/Mint.jpg':
-            self.serve_file('frontend/public/Mint.jpg', 'image/jpeg')
-        else:
-            self.send_error(404, "File not found")
+            return
+
+        # Try to serve from frontend/dist/ (production build)
+        if os.path.isdir(DIST_DIR):
+            rel = path.lstrip('/')
+            candidate = os.path.join(DIST_DIR, rel)
+            if os.path.isfile(candidate):
+                mime, _ = mimetypes.guess_type(candidate)
+                self.serve_file(candidate, mime or 'application/octet-stream')
+                return
+            # Route /app or /app.html to app.html
+            if path in ('/app', '/app.html'):
+                dist_app = os.path.join(DIST_DIR, 'app.html')
+                if os.path.isfile(dist_app):
+                    self.serve_file(dist_app, 'text/html')
+                    return
+            # Landing page fallback
+            dist_index = os.path.join(DIST_DIR, 'index.html')
+            if os.path.isfile(dist_index):
+                self.serve_file(dist_index, 'text/html')
+                return
+
+        # Dev fallback: serve frontend source directly
+        if path in ('/', '/index.html') and os.path.isfile(FRONTEND_INDEX):
+            self.serve_file(FRONTEND_INDEX, 'text/html')
+            return
+        if path in ('/app', '/app.html') and os.path.isfile(FRONTEND_APP):
+            self.serve_file(FRONTEND_APP, 'text/html')
+            return
+
+        self.send_error(404, "File not found")
 
     def do_POST(self):
-        if self.path.startswith('/process'):
+        if urlparse(self.path).path == '/process':
+            params = parse_qs(urlparse(self.path).query)
+            mode = params.get('mode', ['xycut'])[0]
+            if mode not in ('xycut', 'naive'):
+                mode = 'xycut'
+
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length == 0:
                 self.send_error_response(400, "Empty request body")
                 return
 
             try:
-                # Read the raw PDF bytes directly from the request
                 pdf_bytes = self.rfile.read(content_length)
-                
-                # Execute pipeline on bytes directly
-                json_tree, ordered_items = process_pdf(pdf_bytes)
+                json_tree, ordered_items = process_pdf(pdf_bytes, mode=mode)
                 
                 # Calculate metadata
                 unique_pages = set(item.get('page', 0) for item in ordered_items)
